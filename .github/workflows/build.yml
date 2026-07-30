@@ -9,7 +9,7 @@ jobs:
   build:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # Le framework privé n'est pas lié à la compilation (dlopen + runtime ObjC),
       # donc le build passe sur n'importe quel runner macOS récent.

@@ -1,0 +1,24 @@
+/* Menu header */
+"menu.header" = "Limite de charge";
+"menu.unsupported" = "Limite de charge non prise en charge";
+
+/* Un palier sélectionnable, ex. « 80 % ». Espace insécable avant le %. */
+"menu.level" = "%d %%";
+/* Le palier 100 %, qui revient à ne pas limiter du tout */
+"menu.level.unlimited" = "%d %%  (aucune limite)";
+
+"menu.launchAtLogin" = "Lancer à l'ouverture de session";
+"menu.quit" = "Quitter";
+
+/* Titre dans la barre de menu. L'espace initial le sépare de l'icône. */
+"status.title" = " %d %%";
+"status.title.unavailable" = " —";
+"status.tooltip" = "Limite de charge : %d %%";
+"status.tooltip.unavailable" = "Limite de charge indisponible";
+
+/* Erreurs */
+"error.setFailed" = "Impossible d'appliquer %d %%";
+"error.loginItemFailed" = "Impossible de modifier le lancement à l'ouverture de session";
+"error.unreachable" = "PowerUI est injoignable.";
+"error.outOfRange" = "Valeur hors bornes : %d.";
+"error.refused" = "Le démon système a refusé %d %%.";

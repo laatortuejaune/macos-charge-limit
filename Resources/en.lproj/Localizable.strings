@@ -1,0 +1,24 @@
+/* Menu header */
+"menu.header" = "Charge Limit";
+"menu.unsupported" = "Charge limit not supported";
+
+/* A selectable level, e.g. "80%" */
+"menu.level" = "%d%%";
+/* The 100% level, which means no limit at all */
+"menu.level.unlimited" = "%d%%  (no limit)";
+
+"menu.launchAtLogin" = "Launch at Login";
+"menu.quit" = "Quit";
+
+/* Status bar title. Leading space separates it from the icon. */
+"status.title" = " %d%%";
+"status.title.unavailable" = " —";
+"status.tooltip" = "Charge limit: %d%%";
+"status.tooltip.unavailable" = "Charge limit unavailable";
+
+/* Errors */
+"error.setFailed" = "Couldn’t set %d%%";
+"error.loginItemFailed" = "Couldn’t change the launch-at-login setting";
+"error.unreachable" = "PowerUI is unreachable.";
+"error.outOfRange" = "Value out of range: %d.";
+"error.refused" = "The system daemon refused %d%%.";

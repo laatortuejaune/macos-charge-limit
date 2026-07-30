@@ -1,0 +1,151 @@
+# macos-charge-limit
+
+A small macOS menu bar app to read and change the built-in **battery charge
+limit** — 80 / 85 / 90 / 95 / 100 % — without opening System Settings.
+
+<p align="center">
+  <img src="docs/menu.png" width="205" alt="The menu, showing the five levels with a checkmark on the active one">
+</p>
+
+It shows the current limit next to a battery icon, applies a new one in a single
+click, and stays in sync when you change the limit somewhere else.
+
+## Why
+
+macOS 26.4 turned the old "80 % limit" switch into a real setting with five
+levels, buried in **System Settings → Battery → ⓘ next to Charge**. That is four
+clicks away and gives no at-a-glance readout. This puts it in the menu bar.
+
+## Requirements
+
+- An Apple silicon Mac with a battery
+- macOS 26.4 or later (earlier versions only had the on/off 80 % toggle)
+- Command Line Tools. **Xcode is not required.**
+
+## Install
+
+```bash
+git clone https://github.com/laatortuejaune/macos-charge-limit.git
+cd macos-charge-limit
+./build.sh
+cp -R BatteryLimitMenu.app ~/Applications/
+open ~/Applications/BatteryLimitMenu.app
+```
+
+Enable *Launch at Login* from the app's own menu if you want it to stick around.
+
+The app is ad-hoc signed, not notarized — fine when you build it yourself, but
+macOS will complain if you move a prebuilt copy between machines.
+
+---
+
+## How it works
+
+This is the part worth reading. The charge limit is **not** exposed anywhere
+obvious, and every documented route is a dead end.
+
+### What does not work
+
+Verified empirically on macOS 26.6, not assumed:
+
+| Route | Result |
+| --- | --- |
+| `ioreg -rc AppleSmartBattery` | Nothing. All ~60 properties dumped. `MaxCapacity` is battery *health*; `CarrierMode` is shipping mode. |
+| `ioreg -rc AppleSmartBatteryManager`, `IOPMPowerSource` | Nothing. |
+| `system_profiler SPPowerDataType` | Nothing. |
+| `pmset` | Cannot read or write it. |
+| Configuration profile / MDM | No key for it. |
+
+The reason all of these fail is the same: **the charge limit is not a property of
+the hardware.** It is application state owned by a daemon.
+
+### The actual mechanism
+
+Internally the setting is called **MCL — Maximum Charge Level**. It lives in the
+PowerUI daemon, reachable over XPC through a private framework:
+
+```
+System Settings ─┐
+this app         ├─► PowerUISmartChargeClient ──XPC──► PowerUI daemon ──► charge controller
+Shortcuts action ┘      (PowerUI.framework)
+```
+
+The app takes the exact path System Settings takes. **No root, no helper tool, no
+kext, no SMC writes** — because the privileged party is the daemon, not us. We
+are not asking for permission to write the SMC; we are asking an already
+authorised system service to do it.
+
+`PowerUISmartChargeClient` lives in
+`/System/Library/PrivateFrameworks/PowerUI.framework`, which exists only inside
+the dyld shared cache — so it cannot be linked against, only `dlopen`ed and
+reached through the Objective-C runtime.
+
+| Purpose | Selector |
+| --- | --- |
+| Create the client | `-initWithClientName:` |
+| Is it available? | `-isMCLSupported` |
+| **Read the limit** | `-getMCLLimitWithError:` → `unsigned char` |
+| **Write the limit** | `-setMCLLimit:error:` |
+| Offered levels | `-availableChargeLimitsWithError:` → `(80, 85, 90, 95, 100)` |
+| Change signal | Darwin notification `com.apple.powerui.smartchargestatuschanged` |
+
+The levels are asked for rather than hardcoded, so the menu follows if Apple ever
+changes them. The Darwin notification fires whichever app made the change, which
+is what keeps the menu bar in sync with System Settings for free — no polling.
+
+### Four traps
+
+**1. `-init` returns a mute client.** It succeeds and hands back a perfectly live
+object, but with no XPC connection: every call answers `false` / `0` / empty
+array, and the `NSError` is left `nil`. Silent, and easy to mistake for "the
+machine doesn't support it". Only `-initWithClientName:` sets up the connection.
+
+**2. `currentChargeLimit:` is not the setting.** It reports the limit *in effect
+right now* and reads 100 whenever the machine is unplugged. Only
+`-getMCLLimitWithError:` tracks what the user chose. This was confirmed by
+changing the value in System Settings and watching which key moved.
+
+**3. 100 % means "no limit".** Writing 100 disables MCL
+(`-isMCLCurrentlyEnabled:` drops to 0), but `-getMCLLimitWithError:` still
+returns 100 — so a single key is enough to drive the whole UI.
+
+**4. `@main` on an `NSApplicationDelegate` starts the run loop without assigning
+the delegate.** The app runs, mute and invisible, with no error anywhere. Hence
+the explicit entry point in [`App.swift`](Sources/BatteryLimitMenu/App.swift).
+
+### About the Shortcuts route
+
+macOS 26.4 also added a `SetBatteryChargeLimitAction` Shortcuts action — it is in
+`ActionKit`, not in the battery settings extension where you would look first. It
+works, and `shortcuts run "name"` can drive it from a script, but it sits one
+layer *above* the same API, offers no way to read the current value, and would
+mean creating one shortcut per level by hand. The direct call is strictly better.
+
+## Caveats
+
+`PowerUI` is a **private framework**. A macOS update can rename the class or
+change the selectors at any time. The code degrades gracefully — the class lookup
+returns `nil`, the menu says the limit is unsupported and the icon shows `—` —
+but it will break eventually. For the same reason this app can never ship on the
+Mac App Store.
+
+Verified on macOS 26.6 (build 25G72), Mac17,5, Apple silicon.
+
+## Project layout
+
+```
+Sources/BatteryLimitMenu/
+  ChargeLimit.swift     the PowerUI bridge: read, write, change notification
+  App.swift             the menu bar UI
+Resources/
+  Info.plist            LSUIElement — no Dock icon, no window
+  make-icon.swift       regenerates AppIcon.icns
+  en.lproj, fr.lproj    English and French UI
+build.sh                swift build + hand-assembled .app bundle
+```
+
+Regenerate the icon with `swift Resources/make-icon.swift`.
+
+## License
+
+MIT — see [LICENSE](LICENSE).

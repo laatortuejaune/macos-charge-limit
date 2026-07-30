@@ -1,0 +1,20 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Le framework privé n'est pas lié à la compilation (dlopen + runtime ObjC),
+      # donc le build passe sur n'importe quel runner macOS récent.
+      - name: Build
+        run: swift build -c release
+
+      - name: Assemble the .app bundle
+        run: ./build.sh

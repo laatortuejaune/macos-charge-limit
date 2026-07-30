@@ -10,10 +10,24 @@ enum Main {
     private static let delegate = AppDelegate()
 
     static func main() {
+        // Sans ça, deux lancements donnent deux icônes identiques dans la barre.
+        // La copie déjà en place gagne ; c'est la nouvelle qui se retire.
+        if isAlreadyRunning() { return }
+
         let app = NSApplication.shared
         app.delegate = delegate
         app.setActivationPolicy(.accessory)
         app.run()
+    }
+
+    private static func isAlreadyRunning() -> Bool {
+        guard let id = Bundle.main.bundleIdentifier else { return false }
+        // On compare les PID plutôt que de compter : à ce stade `NSApplication`
+        // n'existe pas encore, donc le processus courant n'est pas toujours
+        // inscrit dans la liste. Compter les autres est vrai dans les deux cas.
+        let mine = ProcessInfo.processInfo.processIdentifier
+        return NSRunningApplication.runningApplications(withBundleIdentifier: id)
+            .contains { $0.processIdentifier != mine }
     }
 }
 

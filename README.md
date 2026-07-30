@@ -93,7 +93,7 @@ The levels are asked for rather than hardcoded, so the menu follows if Apple eve
 changes them. The Darwin notification fires whichever app made the change, which
 is what keeps the menu bar in sync with System Settings for free — no polling.
 
-### Four traps
+### Five traps
 
 **1. `-init` returns a mute client.** It succeeds and hands back a perfectly live
 object, but with no XPC connection: every call answers `false` / `0` / empty
@@ -113,6 +113,14 @@ returns 100 — so a single key is enough to drive the whole UI.
 the delegate.** The app runs, mute and invisible, with no error anywhere. Hence
 the explicit entry point in [`App.swift`](Sources/BatteryLimitMenu/App.swift).
 
+**5. `unsafeBitCast` to an `@objc` protocol checks nothing.** It is the neat way
+to call a class you cannot link against, but the compiler stops helping: if any
+selector is missing the message still goes out, and the process dies on
+`NSInvalidArgumentException: unrecognized selector`. Since every selector here
+belongs to a private framework that can change without notice, the client is
+built only after `-respondsToSelector:` has cleared **all** of them. Miss one and
+the client is `nil`, which the UI already knows how to present.
+
 ### About the Shortcuts route
 
 macOS 26.4 also added a `SetBatteryChargeLimitAction` Shortcuts action — it is in
@@ -124,12 +132,20 @@ mean creating one shortcut per level by hand. The direct call is strictly better
 ## Caveats
 
 `PowerUI` is a **private framework**. A macOS update can rename the class or
-change the selectors at any time. The code degrades gracefully — the class lookup
-returns `nil`, the menu says the limit is unsupported and the icon shows `—` —
-but it will break eventually. For the same reason this app can never ship on the
-Mac App Store.
+change its selectors at any time, and one day it will.
 
-Verified on macOS 26.6 (build 25G72), Mac17,5, Apple silicon.
+What that costs is bounded on purpose. The client is only constructed once the
+class resolves *and* every selector the app sends has been confirmed present; if
+anything is missing the client is `nil`, the menu reads *Charge limit not
+supported* and the icon shows `—`. So a future rename degrades the app instead of
+crashing it. This is deliberate rather than incidental — see trap 5 above.
+
+The app cannot ship on the Mac App Store, for the same private-API reason.
+
+Verified on macOS 26.6 (build 25G72), Mac17,5, Apple silicon. That is one machine
+and one OS version: on anything else, treat "it works" as unproven. `Info.plist`
+sets `LSMinimumSystemVersion` to 26.4, so macOS itself declines to launch it
+below the version where the setting exists.
 
 ## Project layout
 

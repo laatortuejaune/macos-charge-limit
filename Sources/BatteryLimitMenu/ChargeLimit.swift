@@ -35,8 +35,19 @@ enum ChargeLimit {
 
     // MARK: - Client XPC
 
+    /// Tout ce que `SmartChargeClientAPI` déclare, donc tout ce qu'on enverra à
+    /// l'objet. À garder synchronisé avec le protocole.
+    private static let requiredSelectors = [
+        "isMCLSupported",
+        "getMCLLimitWithError:",
+        "setMCLLimit:error:",
+        "availableChargeLimitsWithError:",
+    ]
+
     /// Propriétaire ARC du client. Créé une fois, gardé vivant pour toute la
     /// durée de vie de l'app : c'est lui qui porte la connexion XPC.
+    /// `nil` dès qu'un morceau de l'API privée manque — c'est ce qui permet à
+    /// l'app de se contenter d'afficher « non pris en charge ».
     private static let owner: NSObject? = {
         guard dlopen("/System/Library/PrivateFrameworks/PowerUI.framework/PowerUI", RTLD_NOW) != nil,
               let cls = NSClassFromString("PowerUISmartChargeClient") as? NSObject.Type
@@ -52,6 +63,13 @@ enum ChargeLimit {
         let designated = Selector(("initWithClientName:"))
         guard object.responds(to: designated) else { return nil }
         _ = object.perform(designated, with: "BatteryLimitMenu")
+
+        // Indispensable : `unsafeBitCast` vers un protocole @objc ne vérifie rien.
+        // Si une mise à jour de macOS renomme ne serait-ce qu'un sélecteur, le
+        // message part quand même et le processus meurt sur « unrecognized
+        // selector ». On refuse donc le client entier plutôt que de planter.
+        guard requiredSelectors.allSatisfy({ object.responds(to: Selector(($0))) })
+        else { return nil }
 
         return object
     }()

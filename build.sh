@@ -26,3 +26,14 @@ done
 codesign --force --sign - "$APP"
 
 echo "OK  ->  $(pwd)/$APP"
+
+# Le bundle vient d'être remplacé, mais une instance déjà lancée continue de
+# tourner sur l'ancien binaire. `open` ne la remplacerait pas : il se contente
+# d'activer celle qui existe, si bien qu'on croit avoir mis à jour sans l'avoir
+# fait. On le signale plutôt que de tuer l'app sans prévenir.
+if pgrep -f 'BatteryLimitMenu.app/Contents/MacOS' >/dev/null 2>&1; then
+    echo
+    echo "Note: an instance is still running the previous build."
+    echo "      Quit it first — 'open' alone only activates the running copy:"
+    echo "      pkill -f 'BatteryLimitMenu.app/Contents/MacOS' && open $APP"
+fi

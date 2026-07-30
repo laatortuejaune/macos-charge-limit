@@ -34,6 +34,24 @@ open ~/Applications/BatteryLimitMenu.app
 
 Enable *Launch at Login* from the app's own menu if you want it to stick around.
 
+## Updating
+
+```bash
+cd macos-charge-limit
+git pull
+./build.sh
+pkill -f 'BatteryLimitMenu.app/Contents/MacOS'
+open BatteryLimitMenu.app
+```
+
+The `pkill` line is the one people skip. `build.sh` replaces the bundle but never
+touches the process already running from it, and `open` will not start a second
+one — it just activates the copy that is already there. Skip the quit and you
+keep running the old build while believing you upgraded.
+
+Nothing else needs redoing: the bundle path does not change, so *Launch at Login*
+survives an update even though the code signature changes with every build.
+
 The app is ad-hoc signed, not notarized — fine when you build it yourself, but
 macOS will complain if you move a prebuilt copy between machines.
 

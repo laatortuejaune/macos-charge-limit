@@ -1,5 +1,6 @@
 import Foundation
 import IOKit
+import IOKit.ps
 
 // Temps restant, batterie et charge.
 //
@@ -75,6 +76,26 @@ enum BatteryTime {
         guard let toLimit = minutesToLimit(snapshot, level: level, limit: limit)
         else { return L("battery.computing") }
         return L("battery.untilLimit", format(toLimit), limit)
+    }
+
+    /// Le rappel du run loop est une fonction C : il ne capture rien, d'où ce
+    /// stockage à part, ainsi que celui de la source qu'il faut garder en vie.
+    private static var powerHandler: (() -> Void)?
+    private static var powerSource: CFRunLoopSource?
+
+    /// Prévient dès que l'alimentation change : branchement, débranchement,
+    /// variation du niveau. Indispensable depuis que la barre affiche l'état de
+    /// la batterie et non plus la limite — cette dernière ne bougeait qu'à la
+    /// notification du démon, alors que le niveau change tout seul.
+    static func observePowerChanges(_ handler: @escaping () -> Void) {
+        powerHandler = handler
+        guard powerSource == nil,
+              let source = IOPSNotificationCreateRunLoopSource({ _ in
+                  DispatchQueue.main.async { BatteryTime.powerHandler?() }
+              }, nil)?.takeRetainedValue()
+        else { return }
+        CFRunLoopAddSource(CFRunLoopGetMain(), source, .defaultMode)
+        powerSource = source
     }
 
     /// Mode économie d'énergie, `nil` si illisible.

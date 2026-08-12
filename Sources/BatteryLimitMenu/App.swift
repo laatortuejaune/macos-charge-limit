@@ -53,6 +53,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // Resynchronisation quand la limite change ailleurs (Réglages Système,
         // Raccourcis). Le démon poste la notification quelle qu'en soit l'origine.
         ChargeLimit.observeChanges { [weak self] in self?.refreshTitle() }
+
+        // La jauge suit l'état de la batterie, qui change sans prévenir : sans
+        // cet observateur elle resterait figée jusqu'à la prochaine ouverture
+        // du menu.
+        BatteryTime.observePowerChanges { [weak self] in self?.refreshTitle() }
     }
 
     // MARK: - Barre de menu

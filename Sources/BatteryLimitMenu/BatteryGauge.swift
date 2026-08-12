@@ -14,10 +14,10 @@ enum BatteryGauge {
 
     // Proportions relevées sur l'icône de macOS, agrandie au pixel : corps de
     // rapport ~1,84, coins très arrondis, téton détaché par un léger espace.
-    private static let bodySize = NSSize(width: 23.6, height: 12.8)
+    private static let bodySize = NSSize(width: 23, height: 12)
     private static let nubGap: CGFloat = 1.5
-    private static let nubWidth: CGFloat = 1.7
-    private static let cornerRadius: CGFloat = 5.2
+    private static let nubWidth: CGFloat = 2
+    private static let cornerRadius: CGFloat = 4.4
     /// Le corps vide et le téton sont atténués, la portion chargée est pleine.
     private static let dimmed: CGFloat = 0.4
 
@@ -74,21 +74,45 @@ enum BatteryGauge {
     /// liseré d'épaisseur variable, épais loin du centre et quasi nul près de lui,
     /// puisqu'une homothétie écarte les bords proportionnellement à leur distance
     /// au centre. Seule une dilatation donne une épaisseur constante.
-    private static func drawBolt(in body: NSRect) {
-        let height = body.height * 1.06
-        guard let bolt = NSImage(systemSymbolName: "bolt.fill", accessibilityDescription: nil)?
-            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: height, weight: .regular))
-        else { return }
+    /// L'éclair et son détourage viennent du bundle de Contrôle : ce sont les
+    /// images d'Apple elles-mêmes, lues sur la machine au moment de l'affichage.
+    /// Rien n'est copié dans le dépôt, exactement comme pour un SF Symbol.
+    ///
+    /// Le masque est une version épaissie du glyphe, livrée telle quelle — donc
+    /// le liseré est celui du système au pixel près, au lieu d'être approché.
+    private static let systemBolt: (glyph: NSImage, mask: NSImage)? = {
+        guard let bundle = Bundle(path: "/System/Library/CoreServices/ControlCenter.app"),
+              let glyph = bundle.image(forResource: "battery-bolt"),
+              let mask = bundle.image(forResource: "battery-bolt-mask")
+        else { return nil }
+        return (glyph, mask)
+    }()
 
+    private static func drawBolt(in body: NSRect) {
+        if let systemBolt {
+            let box = NSRect(x: body.midX - systemBolt.glyph.size.width / 2,
+                             y: body.midY - systemBolt.glyph.size.height / 2,
+                             width: systemBolt.glyph.size.width,
+                             height: systemBolt.glyph.size.height)
+            systemBolt.mask.draw(in: box, from: .zero, operation: .destinationOut, fraction: 1)
+            systemBolt.glyph.draw(in: box, from: .zero, operation: .sourceOver, fraction: 1)
+            return
+        }
+
+        // Repli si le bundle du système bouge : on refait le liseré à la main.
+        // Le décalage circulaire est indispensable, car agrandir le glyphe
+        // donnerait une épaisseur variable — une homothétie écarte les bords
+        // proportionnellement à leur distance au centre, pas uniformément.
+        guard let bolt = NSImage(systemSymbolName: "bolt.fill", accessibilityDescription: nil)?
+            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: body.height * 1.06,
+                                                                 weight: .regular))
+        else { return }
         let box = NSRect(x: body.midX - bolt.size.width / 2,
                          y: body.midY - bolt.size.height / 2,
                          width: bolt.size.width, height: bolt.size.height)
-
-        let halo: CGFloat = 1.1
-        let steps = 16
-        for step in 0..<steps {
-            let angle = CGFloat(step) / CGFloat(steps) * 2 * .pi
-            bolt.draw(in: box.offsetBy(dx: cos(angle) * halo, dy: sin(angle) * halo),
+        for step in 0..<16 {
+            let angle = CGFloat(step) / 16 * 2 * .pi
+            bolt.draw(in: box.offsetBy(dx: cos(angle) * 1.1, dy: sin(angle) * 1.1),
                       from: .zero, operation: .destinationOut, fraction: 1)
         }
         bolt.draw(in: box, from: .zero, operation: .sourceOver, fraction: 1)

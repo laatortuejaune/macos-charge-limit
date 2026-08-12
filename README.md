@@ -203,9 +203,24 @@ The menu bar gauge is drawn rather than picked from SF Symbols, because **no
 `wifi` and `speaker.wave.3` do. Apple draws its own for the same reason, and
 drawing gives a continuous fill instead of five fixed steps. The image is a
 template, so the fill is carried by alpha alone and the whole thing follows light
-and dark mode by itself. The bolt is the real `bolt.fill` symbol, ringed by a
-knockout drawn with `.destinationOut` — `.clear` would have wiped the whole rect
-rather than only where the glyph is.
+and dark mode by itself.
+
+The bolt is not drawn: Control Centre ships `battery-bolt` and `battery-bolt-mask`
+in its asset catalogue, and both load at runtime out of
+`/System/Library/CoreServices/ControlCenter.app` — the system's own artwork, read
+off the machine, nothing copied into this repo. The mask is a pre-thickened copy
+of the glyph, so the ring around the bolt is the system's to the pixel. It is
+punched out with `.destinationOut`, which clears only where the source is opaque;
+`.clear` would have wiped the whole rect. If that bundle ever moves, the code
+falls back to `bolt.fill` with a ring built by offsetting the glyph around a
+circle — scaling it up instead, which was the first attempt, gives a ring that is
+thick far from the centre and vanishes near it, because a scale moves each edge
+outward in proportion to its distance rather than by a fixed amount.
+
+The body geometry (23 × 12, cap 2 wide) is taken from those same assets rather
+than guessed off a screenshot. The outline and cap images themselves are not used:
+they are the hollow style that the panel still uses, while the menu bar icon is a
+solid capsule.
 
 The panel repeats what the system one shows: level, power source, charge state,
 Low Power Mode, and a way into Battery Settings. **Low Power Mode is read-only.**

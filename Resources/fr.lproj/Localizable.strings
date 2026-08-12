@@ -22,3 +22,17 @@
 "error.unreachable" = "PowerUI est injoignable.";
 "error.outOfRange" = "Valeur hors bornes : %d.";
 "error.refused" = "Le démon système a refusé %d %%.";
+
+/* Ligne d'état batterie, en tête de menu */
+"battery.computing" = "Calcul en cours…";
+"battery.remaining" = "%@ restantes";
+"battery.untilFull" = "Chargé dans %@";
+/* Estimation, d'où le tilde : ex. « ~35 min jusqu'à 80 % » */
+"battery.untilLimit" = "~%1$@ jusqu'à %2$d %%";
+"battery.limitReached" = "Limite atteinte (%d %%)";
+"battery.charged" = "Batterie chargée";
+"battery.paused" = "Charge en pause";
+
+"time.minutes" = "%d min";
+"time.hours" = "%d h";
+"time.hoursMinutes" = "%1$d h %2$02d";

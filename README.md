@@ -4,11 +4,12 @@ A small macOS menu bar app to read and change the built-in **battery charge
 limit** — 80 / 85 / 90 / 95 / 100 % — without opening System Settings.
 
 <p align="center">
-  <img src="docs/menu.png" width="205" alt="The menu, showing the five levels with a checkmark on the active one">
+  <img src="docs/menu.png" width="196" alt="The menu, showing time remaining above the five charge levels with a checkmark on the active one">
 </p>
 
 It shows the current limit next to a battery icon, applies a new one in a single
-click, and stays in sync when you change the limit somewhere else.
+click, stays in sync when you change the limit somewhere else, and reports how
+long is left — on battery, or until charging stops at your limit.
 
 ## Why
 
@@ -139,6 +140,42 @@ belongs to a private framework that can change without notice, the client is
 built only after `-respondsToSelector:` has cleared **all** of them. Miss one and
 the client is `nil`, which the UI already knows how to present.
 
+### Time remaining, and why it has to be computed
+
+Two more things had to be measured rather than assumed. The probe used for it is
+[`Tools/power-probe.swift`](Tools/power-probe.swift).
+
+**No system counter targets the charge limit.** `AvgTimeToFull` always counts to
+100 %, whatever the limit is set to. Flipping the limit 80 → 100 → 80 during an
+actual charge moved it by exactly zero minutes:
+
+```
+17:44:51  limit 80    54%   AvgTimeToFull = 117 min
+17:45:06  limit 100   54%   AvgTimeToFull = 117 min
+17:47:51  limit 100   56%   AvgTimeToFull = 118 min
+17:48:06  limit 80    56%   AvgTimeToFull = 118 min
+```
+
+**`IOPowerSources` returns nothing on macOS 27.** `Time to Empty` and `Time to
+Full Charge` both read `-1` permanently, on battery and while charging; `pmset`
+agrees, printing `no estimate`. Only `AppleSmartBattery` in the IORegistry has
+usable figures, so that is what the app reads. `IORegistryEntryCreateCFProperties`
+is public API; the key names are not.
+
+So the time to a limit below 100 % is computed here. Scaling `AvgTimeToFull` by
+the remaining percentage is the obvious approach and it is wrong: charging slows
+sharply near the top, so the average it represents badly understates the speed of
+the region we care about. Measured over a real charge, 53 → 64 % ran at
+1.4 min/point against the 2.6 min/point that `AvgTimeToFull` implied — scaling it
+would have promised 58 minutes for a stretch that took about 37.
+
+The app extrapolates from the charge current instead, which holds while the
+battery is still in constant-current charging — precisely the region below the
+lowest available limit. On the same charge that method predicted 35 minutes
+against roughly 37 actual. It is still an estimate, and it is shown as one:
+rounded to 5 minutes and prefixed with `~`. At a limit of 100 % no computation
+happens at all, and Apple's own untouched figure is shown without the tilde.
+
 ### About the Shortcuts route
 
 macOS 26.4 also added a `SetBatteryChargeLimitAction` Shortcuts action — it is in
@@ -170,11 +207,14 @@ below the version where the setting exists.
 ```
 Sources/BatteryLimitMenu/
   ChargeLimit.swift     the PowerUI bridge: read, write, change notification
+  BatteryTime.swift     time remaining, and the estimate to the limit
   App.swift             the menu bar UI
 Resources/
   Info.plist            LSUIElement — no Dock icon, no window
   make-icon.swift       regenerates AppIcon.icns
   en.lproj, fr.lproj    English and French UI
+Tools/
+  power-probe.swift     dumps the raw power keys; how the above was measured
 build.sh                swift build + hand-assembled .app bundle
 ```
 

@@ -86,6 +86,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.removeAllItems()
 
         guard ChargeLimit.isSupported else {
+            addBatteryStatus(to: menu, limit: nil)
             menu.addItem(header(L("menu.unsupported")))
             menu.addItem(.separator())
             menu.addItem(loginItem())
@@ -95,6 +96,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
 
         let current = ChargeLimit.current()
+        addBatteryStatus(to: menu, limit: current)
         menu.addItem(header(L("menu.header")))
 
         for limit in ChargeLimit.availableLimits() {
@@ -149,6 +151,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     // MARK: - Utilitaires
+
+    /// Temps restant, en tête de menu. Le menu étant reconstruit à chaque
+    /// ouverture, la valeur est fraîche au moment où on la regarde — inutile
+    /// d'ajouter un minuteur pour une ligne qu'on ne voit que menu ouvert.
+    private func addBatteryStatus(to menu: NSMenu, limit: Int?) {
+        guard let summary = BatteryTime.summary(limit: limit) else { return }
+        menu.addItem(header(summary))
+        menu.addItem(.separator())
+    }
 
     private func header(_ title: String) -> NSMenuItem {
         let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")

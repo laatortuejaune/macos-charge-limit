@@ -3,3 +3,4 @@ BatteryLimitMenu.app/
 Resources/AppIcon.iconset/
 .DS_Store
 *.xcuserdatad
+power-probe

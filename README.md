@@ -64,7 +64,7 @@ obvious, and every documented route is a dead end.
 
 ### What does not work
 
-Verified empirically on macOS 26.6, not assumed:
+Verified empirically on macOS 27.0, not assumed:
 
 | Route | Result |
 | --- | --- |
@@ -160,7 +160,7 @@ crashing it. This is deliberate rather than incidental — see trap 5 above.
 
 The app cannot ship on the Mac App Store, for the same private-API reason.
 
-Verified on macOS 26.6 (build 25G72), Mac17,5, Apple silicon. That is one machine
+Verified on macOS 27.0 (build 26A5388g), Mac17,5, Apple silicon. That is one machine
 and one OS version: on anything else, treat "it works" as unproven. `Info.plist`
 sets `LSMinimumSystemVersion` to 26.4, so macOS itself declines to launch it
 below the version where the setting exists.

@@ -4,8 +4,8 @@
 
 /* A selectable level, e.g. "80%" */
 "menu.level" = "%d%%";
-/* The 100% level, which means no limit at all */
-"menu.level.unlimited" = "%d%%  (no limit)";
+
+"menu.noLimitHint" = "100% means no limit at all";
 
 "menu.launchAtLogin" = "Launch at Login";
 "menu.quit" = "Quit";

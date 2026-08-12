@@ -4,7 +4,7 @@ A small macOS menu bar app to read and change the built-in **battery charge
 limit** — 80 / 85 / 90 / 95 / 100 % — without opening System Settings.
 
 <p align="center">
-  <img src="docs/menu.png" width="196" alt="The menu, showing time remaining above the five charge levels with a checkmark on the active one">
+  <img src="docs/menu.png" width="271" alt="The menu: time remaining, then the five charge levels as a segmented control with 80% selected">
 </p>
 
 It shows the current limit next to a battery icon, applies a new one in a single

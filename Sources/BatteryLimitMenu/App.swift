@@ -99,14 +99,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         addBatteryStatus(to: menu, limit: current)
         menu.addItem(header(L("menu.header")))
 
-        for limit in ChargeLimit.availableLimits() {
-            let title = L(limit >= 100 ? "menu.level.unlimited" : "menu.level", limit)
-            let item = NSMenuItem(title: title, action: #selector(selectLimit(_:)), keyEquivalent: "")
-            item.target = self
-            item.tag = limit
-            item.state = (limit == current) ? .on : .off
-            menu.addItem(item)
-        }
+        menu.addItem(limitsItem(current: current, limits: ChargeLimit.availableLimits()))
 
         menu.addItem(.separator())
         menu.addItem(loginItem())
@@ -116,9 +109,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         refreshTitle()
     }
 
-    @objc private func selectLimit(_ sender: NSMenuItem) {
-        if case .failure(let error) = ChargeLimit.set(sender.tag) {
-            warn(L("error.setFailed", sender.tag), error.localizedDescription)
+    /// Les paliers sur une seule ligne, dans un contrôle segmenté. Un `NSMenuItem`
+    /// porteur d'une vue ne reçoit pas le surlignage habituel des menus, ce qui
+    /// tombe bien : il se lit comme un contrôle et non comme une liste d'actions.
+    private func limitsItem(current: Int?, limits: [Int]) -> NSMenuItem {
+        let control = NSSegmentedControl(labels: limits.map { L("menu.level", $0) },
+                                         trackingMode: .selectOne,
+                                         target: self,
+                                         action: #selector(selectLimit(_:)))
+        control.segmentDistribution = .fillEqually
+        control.selectedSegment = -1
+        for (index, limit) in limits.enumerated() {
+            control.setTag(limit, forSegment: index)
+            if limit >= 100 { control.setToolTip(L("menu.noLimitHint"), forSegment: index) }
+            if limit == current { control.selectedSegment = index }
+        }
+        control.sizeToFit()
+
+        // Marges alignées sur celles d'un titre de menu ordinaire.
+        let horizontal: CGFloat = 14, vertical: CGFloat = 5
+        let container = NSView(frame: NSRect(x: 0, y: 0,
+                                             width: control.frame.width + horizontal * 2,
+                                             height: control.frame.height + vertical * 2))
+        control.setFrameOrigin(NSPoint(x: horizontal, y: vertical))
+        container.addSubview(control)
+
+        let item = NSMenuItem()
+        item.view = container
+        return item
+    }
+
+    @objc private func selectLimit(_ sender: NSSegmentedControl) {
+        let limit = sender.tag(forSegment: sender.selectedSegment)
+        // Une vue dans un menu ne le referme pas d'elle-même.
+        sender.enclosingMenuItem?.menu?.cancelTracking()
+
+        if case .failure(let error) = ChargeLimit.set(limit) {
+            warn(L("error.setFailed", limit), error.localizedDescription)
         }
         // Le démon poste la notification, mais on rafraîchit tout de suite pour
         // que l'affichage ne dépende pas de son délai.

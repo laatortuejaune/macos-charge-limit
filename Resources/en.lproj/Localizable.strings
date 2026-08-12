@@ -13,8 +13,8 @@
 /* Status bar title. Leading space separates it from the icon. */
 "status.title" = " %d%%";
 "status.title.unavailable" = " —";
-"status.tooltip" = "Charge limit: %d%%";
-"status.tooltip.unavailable" = "Charge limit unavailable";
+"status.tooltip" = "Battery: %d%%";
+"status.tooltip.unavailable" = "Battery unavailable";
 
 /* Errors */
 "error.setFailed" = "Couldn’t set %d%%";
@@ -36,3 +36,15 @@
 "time.minutes" = "%d min";
 "time.hours" = "%d h";
 "time.hoursMinutes" = "%1$d h %2$02d";
+"status.tooltip.full" = "Battery: %1$d%% — limit %2$d%%";
+
+/* Panel, mirroring the macOS battery menu */
+"panel.title" = "Battery";
+"panel.source" = "Power Source: %@";
+"panel.source.adapter" = "Power Adapter";
+"panel.source.battery" = "Battery";
+"panel.lowPower" = "Low Power Mode: %@";
+"panel.on" = "On";
+"panel.off" = "Off";
+"panel.settings" = "Battery Settings…";
+"battery.adapterTooWeak" = "Adapter can’t keep up";

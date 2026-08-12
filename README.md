@@ -4,12 +4,12 @@ A small macOS menu bar app to read and change the built-in **battery charge
 limit** — 80 / 85 / 90 / 95 / 100 % — without opening System Settings.
 
 <p align="center">
-  <img src="docs/menu.png" width="271" alt="The menu: time remaining, then the five charge levels as a segmented control with 80% selected">
+  <img src="docs/menu.png" width="281" alt="The menu, mirroring the macOS battery panel, with a charge-limit segmented control added">
 </p>
 
-It shows the current limit next to a battery icon, applies a new one in a single
-click, stays in sync when you change the limit somewhere else, and reports how
-long is left — on battery, or until charging stops at your limit.
+It mirrors the macOS battery menu — same drawn gauge, same panel layout — with
+the charge limit added to it, so you can turn Apple's own battery icon off and
+stop having two of them side by side.
 
 ## Why
 
@@ -195,6 +195,29 @@ lowest available limit. On the same charge that method predicted 35 minutes
 against roughly 37 actual. It is still an estimate, and it is shown as one:
 rounded to 5 minutes and prefixed with `~`. At a limit of 100 % no computation
 happens at all, and Apple's own untouched figure is shown without the tilde.
+
+### Standing in for the system battery menu
+
+The menu bar gauge is drawn rather than picked from SF Symbols, because **no
+`battery.*` symbol supports variable value** — checked across all six, while
+`wifi` and `speaker.wave.3` do. Apple draws its own for the same reason, and
+drawing gives a continuous fill instead of five fixed steps. The image is a
+template, so the fill is carried by alpha alone and the whole thing follows light
+and dark mode by itself. The bolt is the real `bolt.fill` symbol, ringed by a
+knockout drawn with `.destinationOut` — `.clear` would have wiped the whole rect
+rather than only where the glyph is.
+
+The panel repeats what the system one shows: level, power source, charge state,
+Low Power Mode, and a way into Battery Settings. **Low Power Mode is read-only.**
+`_PMLowPowerMode.setPowerMode:fromSource:` never calls back and changes nothing,
+including from a signed bundle; the daemon checks the caller's entitlement, which
+no third-party app can grant itself and `sudo` does not bypass. Clicking the row
+opens Battery Settings, where it can be changed. The "apps using significant
+energy" list is left out: it needs a sampling pass on every open, for the least
+consulted part of the panel.
+
+To hide Apple's own battery icon, turn it off in System Settings → Control Centre
+→ Battery.
 
 ### About the Shortcuts route
 

@@ -37,8 +37,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        statusItem.button?.image = Self.statusIcon()
-        statusItem.button?.imagePosition = .imageLeading
+        statusItem.button?.imagePosition = .imageOnly
 
         let menu = NSMenu()
         menu.delegate = self
@@ -58,29 +57,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     // MARK: - Barre de menu
 
+    /// La barre n'affiche que la jauge, comme celle de macOS : pas de texte, pour
+    /// que remplacer l'icône du système ne rallonge pas la barre de menu.
     private func refreshTitle() {
         guard let button = statusItem.button else { return }
-        if let limit = ChargeLimit.current() {
-            button.title = L("status.title", limit)
-            button.toolTip = L("status.tooltip", limit)
-        } else {
-            button.title = L("status.title.unavailable")
-            button.toolTip = L("status.tooltip.unavailable")
-        }
-    }
+        button.title = ""
 
-    private static func statusIcon() -> NSImage? {
-        // Le premier symbole disponible gagne : les noms SF Symbols ont changé
-        // entre versions de macOS, autant ne pas parier sur un seul.
-        for name in ["battery.100percent.bolt", "bolt.batteryblock",
-                     "battery.100percent", "battery.100"] {
-            if let image = NSImage(systemSymbolName: name,
-                                   accessibilityDescription: "Limite de charge") {
-                image.isTemplate = true   // suit le thème clair / sombre
-                return image
-            }
+        guard let gauge = BatteryTime.gauge() else {
+            button.image = BatteryGauge.image(level: 0, charging: false)
+            button.toolTip = L("status.tooltip.unavailable")
+            return
         }
-        return nil
+        button.image = BatteryGauge.image(level: gauge.level, charging: gauge.charging)
+
+        if let limit = ChargeLimit.current() {
+            button.toolTip = L("status.tooltip.full", gauge.level, limit)
+        } else {
+            button.toolTip = L("status.tooltip", gauge.level)
+        }
     }
 
     // MARK: - Menu
@@ -90,24 +84,47 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
 
-        guard ChargeLimit.isSupported else {
-            addBatteryStatus(to: menu, limit: nil)
-            menu.addItem(header(L("menu.unsupported")))
-            menu.addItem(.separator())
-            menu.addItem(loginItem())
-            menu.addItem(.separator())
-            menu.addItem(quitItem())
-            return
+        let gauge = BatteryTime.gauge()
+        let current = ChargeLimit.isSupported ? ChargeLimit.current() : nil
+
+        // Même ossature que le panneau batterie de macOS — titre et pourcentage,
+        // source d'alimentation, état de charge, mode économie, accès aux
+        // réglages — pour qu'on puisse masquer celui du système sans rien perdre.
+        menu.addItem(titleRow(L("panel.title"),
+                              gauge.map { L("menu.level", $0.level) } ?? "—"))
+        if let gauge {
+            menu.addItem(header(L("panel.source",
+                                  L(gauge.plugged ? "panel.source.adapter"
+                                                  : "panel.source.battery"))))
+        }
+        if let summary = BatteryTime.summary(limit: current) {
+            menu.addItem(header(summary))
         }
 
-        let current = ChargeLimit.current()
-        addBatteryStatus(to: menu, limit: current)
-        menu.addItem(header(L("menu.header")))
+        menu.addItem(.separator())
+        if ChargeLimit.isSupported {
+            menu.addItem(header(L("menu.header")))
+            menu.addItem(limitsItem(current: current, limits: ChargeLimit.availableLimits()))
+        } else {
+            menu.addItem(header(L("menu.unsupported")))
+        }
 
-        menu.addItem(limitsItem(current: current, limits: ChargeLimit.availableLimits()))
+        if let low = BatteryTime.lowPowerMode() {
+            menu.addItem(.separator())
+            // Lecture seule : le clic renvoie aux Réglages, seul endroit où le
+            // basculer sans le droit système qui nous manque.
+            let item = NSMenuItem(title: L("panel.lowPower", L(low ? "panel.on" : "panel.off")),
+                                  action: #selector(openBatterySettings), keyEquivalent: "")
+            item.target = self
+            menu.addItem(item)
+        }
 
         menu.addItem(.separator())
         menu.addItem(loginItem())
+        let settings = NSMenuItem(title: L("panel.settings"),
+                                  action: #selector(openBatterySettings), keyEquivalent: "")
+        settings.target = self
+        menu.addItem(settings)
         menu.addItem(.separator())
         menu.addItem(quitItem())
 
@@ -184,13 +201,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     // MARK: - Utilitaires
 
-    /// Temps restant, en tête de menu. Le menu étant reconstruit à chaque
-    /// ouverture, la valeur est fraîche au moment où on la regarde — inutile
-    /// d'ajouter un minuteur pour une ligne qu'on ne voit que menu ouvert.
-    private func addBatteryStatus(to menu: NSMenu, limit: Int?) {
-        guard let summary = BatteryTime.summary(limit: limit) else { return }
-        menu.addItem(header(summary))
-        menu.addItem(.separator())
+    /// Titre à gauche, valeur alignée à droite sur la même ligne, comme le
+    /// panneau du système. Un taquet de tabulation suffit, pas besoin d'une vue
+    /// sur mesure.
+    private func titleRow(_ left: String, _ right: String) -> NSMenuItem {
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.tabStops = [NSTextTab(textAlignment: .right, location: 200)]
+        let item = NSMenuItem()
+        item.attributedTitle = NSAttributedString(
+            string: "\(left)\t\(right)",
+            attributes: [.font: NSFont.boldSystemFont(ofSize: NSFont.systemFontSize),
+                         .paragraphStyle: paragraph])
+        item.isEnabled = false
+        return item
+    }
+
+    @objc private func openBatterySettings() {
+        NSWorkspace.shared.open(
+            URL(string: "x-apple.systempreferences:com.apple.Battery-Settings.extension")!)
     }
 
     private func header(_ title: String) -> NSMenuItem {

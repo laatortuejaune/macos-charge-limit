@@ -13,8 +13,8 @@
 /* Titre dans la barre de menu. L'espace initial le sépare de l'icône. */
 "status.title" = " %d %%";
 "status.title.unavailable" = " —";
-"status.tooltip" = "Limite de charge : %d %%";
-"status.tooltip.unavailable" = "Limite de charge indisponible";
+"status.tooltip" = "Batterie : %d %%";
+"status.tooltip.unavailable" = "Batterie indisponible";
 
 /* Erreurs */
 "error.setFailed" = "Impossible d'appliquer %d %%";
@@ -36,3 +36,15 @@
 "time.minutes" = "%d min";
 "time.hours" = "%d h";
 "time.hoursMinutes" = "%1$d h %2$02d";
+"status.tooltip.full" = "Batterie : %1$d %% — limite %2$d %%";
+
+/* Panneau, calqué sur le menu batterie de macOS */
+"panel.title" = "Batterie";
+"panel.source" = "Alimentation : %@";
+"panel.source.adapter" = "Adaptateur secteur";
+"panel.source.battery" = "Batterie";
+"panel.lowPower" = "Mode économie : %@";
+"panel.on" = "activé";
+"panel.off" = "désactivé";
+"panel.settings" = "Réglages Batterie…";
+"battery.adapterTooWeak" = "L’adaptateur ne suit pas";

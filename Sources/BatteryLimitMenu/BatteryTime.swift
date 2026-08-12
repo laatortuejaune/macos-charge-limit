@@ -15,6 +15,12 @@ import IOKit
 //    « no estimate » de la même façon. D'où la lecture directe d'AppleSmartBattery
 //    dans l'IORegistry : l'accès est public, les noms de clés ne le sont pas.
 
+/// Le seul sélecteur de `_PMLowPowerMode` qu'on utilise. L'écriture existe dans
+/// la classe mais reste sans effet sans le droit adéquat, donc on ne la déclare pas.
+@objc protocol LowPowerReader {
+    func getPowerMode() -> Int
+}
+
 enum BatteryTime {
 
     /// Ligne d'état à afficher, ou `nil` si la machine n'a pas de batterie lisible.
@@ -58,9 +64,45 @@ enum BatteryTime {
         }
 
         guard level < limit else { return L("battery.limitReached", limit) }
+
+        // Branché, annoncé « en charge », mais courant négatif : l'adaptateur ne
+        // couvre pas la consommation et la batterie se vide quand même. Vu en
+        // vrai avec un chargeur tombé à 8 W parce qu'un autre appareil partageait
+        // le port. Annoncer « calcul en cours » laisserait croire à une attente.
+        if let current = amperage(snapshot), current <= 0 {
+            return L("battery.adapterTooWeak")
+        }
         guard let toLimit = minutesToLimit(snapshot, level: level, limit: limit)
         else { return L("battery.computing") }
         return L("battery.untilLimit", format(toLimit), limit)
+    }
+
+    /// Mode économie d'énergie, `nil` si illisible.
+    ///
+    /// Lecture seule, et ce n'est pas un oubli : `setPowerMode:fromSource:` ne
+    /// fait rien depuis une app tierce — testé aussi depuis un bundle signé,
+    /// l'appel n'est jamais rappelé et la valeur ne bouge pas. Réglages Système
+    /// dispose d'un droit qu'aucune app tierce ne peut s'accorder, et passer root
+    /// n'y change rien puisque c'est la signature de l'appelant qui est vérifiée.
+    static func lowPowerMode() -> Bool? {
+        guard dlopen("/System/Library/PrivateFrameworks/LowPowerMode.framework/LowPowerMode",
+                     RTLD_NOW) != nil,
+              let cls = NSClassFromString("_PMLowPowerMode") as? NSObject.Type,
+              let object = (cls as AnyObject).perform(Selector(("sharedInstance")))?
+                  .takeUnretainedValue() as? NSObject,
+              object.responds(to: Selector(("getPowerMode")))
+        else { return nil }
+        return unsafeBitCast(object, to: LowPowerReader.self).getPowerMode() == 1
+    }
+
+    /// Niveau de charge et état, pour dessiner la jauge de la barre de menu.
+    static func gauge() -> (level: Int, charging: Bool, plugged: Bool)? {
+        guard let snapshot = batterySnapshot(), flag(snapshot, "BatteryInstalled"),
+              let level = integer(snapshot, "CurrentCapacity")
+        else { return nil }
+        return (min(max(level, 0), 100),
+                flag(snapshot, "IsCharging"),
+                flag(snapshot, "ExternalConnected"))
     }
 
     // MARK: - Autonomie lissée

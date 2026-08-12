@@ -15,8 +15,8 @@ enum BatteryGauge {
     // Proportions relevées sur l'icône de macOS, agrandie au pixel : corps de
     // rapport ~1,84, coins très arrondis, téton détaché par un léger espace.
     private static let bodySize = NSSize(width: 23.6, height: 12.8)
-    private static let nubGap: CGFloat = 0.8
-    private static let nubWidth: CGFloat = 1.5
+    private static let nubGap: CGFloat = 1.5
+    private static let nubWidth: CGFloat = 1.7
     private static let cornerRadius: CGFloat = 5.2
     /// Le corps vide et le téton sont atténués, la portion chargée est pleine.
     private static let dimmed: CGFloat = 0.4
@@ -37,7 +37,7 @@ enum BatteryGauge {
         shape.fill()
 
         // Téton détaché, dans le même gris que la partie vide.
-        let nubHeight = bodySize.height * 0.38
+        let nubHeight = bodySize.height * 0.30
         let nub = NSBezierPath(roundedRect: NSRect(x: body.maxX + nubGap,
                                                    y: body.midY - nubHeight / 2,
                                                    width: nubWidth, height: nubHeight),
@@ -65,24 +65,32 @@ enum BatteryGauge {
     /// L'éclair vient du symbole `bolt.fill` : c'est le dessin d'Apple lui-même,
     /// donc inutile d'essayer de le retracer à la main.
     ///
-    /// Il est cerné d'un liseré transparent qui laisse voir le fond. On l'obtient
-    /// en effaçant d'abord une version légèrement agrandie — `.destinationOut`
-    /// n'efface que là où la source est opaque, contrairement à `.clear` qui
-    /// viderait tout le rectangle.
+    /// Il est cerné d'un liseré transparent qui laisse voir le fond, obtenu en
+    /// effaçant le glyphe décalé tout autour avant de le redessiner plein.
+    /// `.destinationOut` n'efface que là où la source est opaque, contrairement à
+    /// `.clear` qui viderait tout le rectangle.
+    ///
+    /// Le décalage circulaire est indispensable : agrandir le glyphe donnerait un
+    /// liseré d'épaisseur variable, épais loin du centre et quasi nul près de lui,
+    /// puisqu'une homothétie écarte les bords proportionnellement à leur distance
+    /// au centre. Seule une dilatation donne une épaisseur constante.
     private static func drawBolt(in body: NSRect) {
         let height = body.height * 1.06
         guard let bolt = NSImage(systemSymbolName: "bolt.fill", accessibilityDescription: nil)?
             .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: height, weight: .regular))
         else { return }
 
-        let size = bolt.size
-        func rect(scale: CGFloat) -> NSRect {
-            NSRect(x: body.midX - size.width * scale / 2,
-                   y: body.midY - size.height * scale / 2,
-                   width: size.width * scale, height: size.height * scale)
-        }
+        let box = NSRect(x: body.midX - bolt.size.width / 2,
+                         y: body.midY - bolt.size.height / 2,
+                         width: bolt.size.width, height: bolt.size.height)
 
-        bolt.draw(in: rect(scale: 1.20), from: .zero, operation: .destinationOut, fraction: 1)
-        bolt.draw(in: rect(scale: 1.0), from: .zero, operation: .sourceOver, fraction: 1)
+        let halo: CGFloat = 1.1
+        let steps = 16
+        for step in 0..<steps {
+            let angle = CGFloat(step) / CGFloat(steps) * 2 * .pi
+            bolt.draw(in: box.offsetBy(dx: cos(angle) * halo, dy: sin(angle) * halo),
+                      from: .zero, operation: .destinationOut, fraction: 1)
+        }
+        bolt.draw(in: box, from: .zero, operation: .sourceOver, fraction: 1)
     }
 }

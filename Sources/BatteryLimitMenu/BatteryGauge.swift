@@ -14,16 +14,21 @@ enum BatteryGauge {
 
     // Proportions relevées sur l'icône de macOS, agrandie au pixel : corps de
     // rapport ~1,84, coins très arrondis, téton détaché par un léger espace.
+    // Toutes ces valeurs sont relevées sur les assets du système et sur son
+    // icône capturée au pixel, pas estimées à l'œil.
     private static let bodySize = NSSize(width: 23, height: 12)
-    private static let nubGap: CGFloat = 1.5
-    private static let nubWidth: CGFloat = 2
     private static let cornerRadius: CGFloat = 4.4
+    /// Dôme visible du téton, et son écart au corps.
+    private static let capVisible = NSSize(width: 1.5, height: 4.5)
+    private static let capGap: CGFloat = 1.0
+    /// Hauteur à laquelle le système affiche l'éclair : il déborde du corps.
+    private static let boltVisibleHeight: CGFloat = 14
     /// Le corps vide et le téton sont atténués, la portion chargée est pleine.
     private static let dimmed: CGFloat = 0.4
 
     static func image(level: Int, charging: Bool) -> NSImage {
-        let size = NSSize(width: bodySize.width + nubGap + nubWidth + 1,
-                          height: bodySize.height + 2)
+        let size = NSSize(width: bodySize.width + capGap + capVisible.width + 1,
+                          height: boltVisibleHeight + 1)
         let image = NSImage(size: size)
         let originY = (size.height - bodySize.height) / 2
 
@@ -36,13 +41,7 @@ enum BatteryGauge {
         NSColor.black.withAlphaComponent(dimmed).setFill()
         shape.fill()
 
-        // Téton détaché, dans le même gris que la partie vide.
-        let nubHeight = bodySize.height * 0.30
-        let nub = NSBezierPath(roundedRect: NSRect(x: body.maxX + nubGap,
-                                                   y: body.midY - nubHeight / 2,
-                                                   width: nubWidth, height: nubHeight),
-                               xRadius: nubWidth / 2, yRadius: nubWidth / 2)
-        nub.fill()
+        drawCap(after: body)
 
         // Portion chargée : la même forme, rognée à la largeur du niveau, pour
         // que les coins arrondis restent ceux du corps.
@@ -80,20 +79,45 @@ enum BatteryGauge {
     ///
     /// Le masque est une version épaissie du glyphe, livrée telle quelle — donc
     /// le liseré est celui du système au pixel près, au lieu d'être approché.
+    private static let controlCentre = Bundle(path: "/System/Library/CoreServices/ControlCenter.app")
+
     private static let systemBolt: (glyph: NSImage, mask: NSImage)? = {
-        guard let bundle = Bundle(path: "/System/Library/CoreServices/ControlCenter.app"),
-              let glyph = bundle.image(forResource: "battery-bolt"),
-              let mask = bundle.image(forResource: "battery-bolt-mask")
+        guard let glyph = controlCentre?.image(forResource: "battery-bolt"),
+              let mask = controlCentre?.image(forResource: "battery-bolt-mask")
         else { return nil }
         return (glyph, mask)
     }()
 
+    private static let systemCap = controlCentre?.image(forResource: "battery-cap")
+
+    /// Le téton est un dôme, plat côté corps et bombé vers l'extérieur, pas un
+    /// bâtonnet uniforme. Autant prendre celui du système que le retracer.
+    private static func drawCap(after body: NSRect) {
+        guard let cap = systemCap else {
+            // Repli grossier : un demi-disque approché par un rectangle arrondi.
+            let height = capVisible.height
+            NSBezierPath(roundedRect: NSRect(x: body.maxX + capGap, y: body.midY - height / 2,
+                                             width: capVisible.width, height: height),
+                         xRadius: capVisible.width / 2, yRadius: capVisible.width / 2).fill()
+            return
+        }
+        // Le dôme est collé au bord gauche de sa boîte — la demi-unité de marge
+        // est à droite — donc le bord de la boîte donne directement l'écart voulu.
+        cap.draw(in: NSRect(x: body.maxX + capGap, y: body.midY - cap.size.height / 2,
+                            width: cap.size.width, height: cap.size.height),
+                 from: .zero, operation: .sourceOver, fraction: 1)
+    }
+
     private static func drawBolt(in body: NSRect) {
         if let systemBolt {
-            let box = NSRect(x: body.midX - systemBolt.glyph.size.width / 2,
-                             y: body.midY - systemBolt.glyph.size.height / 2,
-                             width: systemBolt.glyph.size.width,
-                             height: systemBolt.glyph.size.height)
+            // L'asset mesure 12 de haut pour son glyphe visible, alors que le
+            // système l'affiche sur 14 : il l'agrandit, et c'est ce qui le fait
+            // dépasser du corps et épaissit son liseré d'autant.
+            let scale = boltVisibleHeight / 12.0
+            let size = NSSize(width: systemBolt.glyph.size.width * scale,
+                              height: systemBolt.glyph.size.height * scale)
+            let box = NSRect(x: body.midX - size.width / 2, y: body.midY - size.height / 2,
+                             width: size.width, height: size.height)
             systemBolt.mask.draw(in: box, from: .zero, operation: .destinationOut, fraction: 1)
             systemBolt.glyph.draw(in: box, from: .zero, operation: .sourceOver, fraction: 1)
             return

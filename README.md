@@ -217,10 +217,16 @@ circle — scaling it up instead, which was the first attempt, gives a ring that
 thick far from the centre and vanishes near it, because a scale moves each edge
 outward in proportion to its distance rather than by a fixed amount.
 
-The body geometry (23 × 12, cap 2 wide) is taken from those same assets rather
-than guessed off a screenshot. The outline and cap images themselves are not used:
-they are the hollow style that the panel still uses, while the menu bar icon is a
-solid capsule.
+The cap comes from `battery-cap` too — it is a dome, flat against the body and
+bulging outward, not the uniform rounded bar it looks like at a glance. The
+`battery-outline` image is the one piece not used: it is the hollow style the
+panel still uses, whereas the menu bar icon is a solid capsule.
+
+Every dimension is measured rather than eyeballed, by thresholding a screen
+capture of both icons and comparing bounding boxes: body 23 × 12, cap 1.5 × 4.5
+with a 1 pt gap, bolt 14 pt tall. That last one is the catch — the bolt asset's
+visible glyph is only 12 pt, so the system scales it up, which is both why the
+bolt overhangs the body and why its ring is thicker than the asset's own.
 
 The panel repeats what the system one shows: level, power source, charge state,
 Low Power Mode, and a way into Battery Settings. **Low Power Mode is read-only.**

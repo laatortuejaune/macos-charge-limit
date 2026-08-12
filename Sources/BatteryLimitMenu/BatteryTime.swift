@@ -33,7 +33,8 @@ enum BatteryTime {
         let level = integer(snapshot, "CurrentCapacity") ?? 0
 
         guard flag(snapshot, "ExternalConnected") else {
-            guard let remaining = duration(snapshot, "TimeRemaining")
+            guard let remaining = smoothedMinutesRemaining(snapshot)
+                    ?? duration(snapshot, "TimeRemaining")
                     ?? duration(snapshot, "AvgTimeToEmpty")
             else { return L("battery.computing") }
             return L("battery.remaining", format(remaining))
@@ -60,6 +61,78 @@ enum BatteryTime {
         guard let toLimit = minutesToLimit(snapshot, level: level, limit: limit)
         else { return L("battery.computing") }
         return L("battery.untilLimit", format(toLimit), limit)
+    }
+
+    // MARK: - Autonomie lissée
+
+    /// Dernier relevé d'accumulateur, qui sert d'ancre à la fenêtre de moyenne.
+    private static var loadAnchor: (accumulated: Int64, samples: Int64)?
+
+    /// À appeler au démarrage : pose l'ancre pour que la toute première ouverture
+    /// du menu dispose déjà d'une fenêtre exploitable.
+    static func primeAverage() {
+        guard let snapshot = batterySnapshot() else { return }
+        _ = smoothedMinutesRemaining(snapshot)
+    }
+
+    /// Autonomie calculée sur la consommation *moyenne*, pas instantanée.
+    ///
+    /// `TimeRemaining` suit la charge de l'instant : mesuré sur une soirée, il a
+    /// varié d'un facteur 70 (106 min à 7427 min) avec 83 minutes d'écart moyen
+    /// entre deux relevés espacés de 45 s. Inutilisable tel quel — c'est d'ailleurs
+    /// pour ça que `pmset` refuse d'afficher une estimation sur cette machine.
+    ///
+    /// `PowerTelemetryData` expose un accumulateur de consommation et son nombre
+    /// d'échantillons, à ~1 Hz. La différence entre deux relevés donne donc la
+    /// consommation moyenne sur l'intervalle exact qui les sépare, sans rien
+    /// échantillonner soi-même : mesuré sur 180 s, 3427 mW contre 3473 mW pour la
+    /// vraie moyenne des instantanés, soit 1,3 % d'écart.
+    ///
+    /// L'ancre n'avance qu'une fois la fenêtre exploitée, sinon deux ouvertures
+    /// rapprochées la réinitialiseraient sans jamais rien produire.
+    private static func smoothedMinutesRemaining(_ snapshot: [String: Any]) -> Int? {
+        guard let telemetry = snapshot["PowerTelemetryData"] as? [String: Any],
+              let accumulated = signed(telemetry, "AccumulatedSystemLoad"),
+              let samples = signed(telemetry, "SystemLoadAccumulatorCount")
+        else { return nil }
+
+        guard let anchor = loadAnchor else {
+            loadAnchor = (accumulated, samples)
+            return nil
+        }
+
+        let elapsed = samples - anchor.samples
+        let consumed = accumulated - anchor.accumulated
+
+        // Compteurs repartis de zéro (redémarrage, batterie réinitialisée) :
+        // on repose l'ancre plutôt que de produire un chiffre absurde.
+        guard elapsed >= 0, consumed >= 0 else {
+            loadAnchor = (accumulated, samples)
+            return nil
+        }
+        // Le compteur tourne à ~0,96 Hz, pas 1 Hz : exiger 60 échantillons
+        // reviendrait à exiger 63 secondes, et une ouverture de menu à la minute
+        // passerait systématiquement juste en dessous. Trente échantillons — une
+        // demi-minute — suffisent déjà à lisser les à-coups d'une seconde.
+        guard elapsed >= 30 else { return nil }
+
+        let averagePower = Double(consumed) / Double(elapsed)
+        guard averagePower > 0,
+              let battery = snapshot["BatteryData"] as? [String: Any],
+              let capacity = (battery["TrueRemainingCapacity"] as? NSNumber)?.doubleValue,
+              let voltage = (snapshot["Voltage"] as? NSNumber)?.doubleValue,
+              capacity > 0, voltage > 0
+        else { return nil }
+
+        let energy = capacity * voltage / 1000              // mWh
+        let minutes = Int((energy / averagePower * 60).rounded())
+        guard minutes > 0, minutes < 48 * 60 else { return nil }
+
+        // L'ancre ne se recentre qu'au-delà de dix minutes. La déplacer à chaque
+        // usage rendait la fenêtre suivante trop courte pour être exploitable, et
+        // l'affichage alternait entre valeur lissée et valeur brute.
+        if elapsed >= 600 { loadAnchor = (accumulated, samples) }
+        return minutes
     }
 
     // MARK: - Estimation jusqu'à la limite
@@ -115,10 +188,15 @@ enum BatteryTime {
         (integer(snapshot, key) ?? 0) != 0
     }
 
-    /// `Amperage` est stocké non signé : négatif une fois réinterprété = décharge.
+    /// Ces compteurs sont stockés non signés : il faut réinterpréter les bits pour
+    /// retrouver le signe, sans quoi une décharge devient un nombre astronomique.
+    private static func signed(_ snapshot: [String: Any], _ key: String) -> Int64? {
+        guard let raw = (snapshot[key] as? NSNumber)?.uint64Value else { return nil }
+        return Int64(bitPattern: raw)
+    }
+
     private static func amperage(_ snapshot: [String: Any]) -> Int? {
-        guard let raw = (snapshot["Amperage"] as? NSNumber)?.uint64Value else { return nil }
-        return Int(Int64(bitPattern: raw))
+        signed(snapshot, "Amperage").map(Int.init)
     }
 
     /// Les compteurs valent -1 tant que l'estimation n'est pas stabilisée, et

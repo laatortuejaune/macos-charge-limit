@@ -162,6 +162,26 @@ agrees, printing `no estimate`. Only `AppleSmartBattery` in the IORegistry has
 usable figures, so that is what the app reads. `IORegistryEntryCreateCFProperties`
 is public API; the key names are not.
 
+**And the raw figure is far too jumpy to show.** `TimeRemaining` tracks the power
+draw of the moment, so it swings with whatever the machine happens to be doing.
+Logged over an evening it ranged from 106 to 7427 minutes — a factor of 70 — with
+83 minutes of average change between readings taken 45 seconds apart. That is
+presumably why `pmset` declines to print an estimate at all here.
+
+So the app averages it. `PowerTelemetryData` carries a running total of power
+drawn plus the number of samples behind it, ticking at about 0.96 Hz. Subtracting
+two readings therefore yields the mean draw over exactly the interval between
+them, with nothing to sample and no timer to run — the previous reading is simply
+remembered. Checked against a 180-second window: 3427 mW that way against 3473 mW
+for the true mean of the instantaneous values, 1.3 % apart. Autonomy is then the
+remaining energy over that mean rather than over the current instant.
+
+Measured over seven readings a minute apart, that takes the spread from a factor
+of **2.46** down to **1.20**, and the average jump between consecutive readings
+from **74 minutes to 16**. The window widens from 30 seconds up to 10 minutes
+before re-anchoring, which keeps it responsive to a change of activity without
+chasing every spike.
+
 So the time to a limit below 100 % is computed here. Scaling `AvgTimeToFull` by
 the remaining percentage is the obvious approach and it is wrong: charging slows
 sharply near the top, so the average it represents badly understates the speed of

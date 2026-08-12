@@ -46,6 +46,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         refreshTitle()
 
+        // Pose l'ancre de la moyenne de consommation : sans ça, la première
+        // ouverture du menu n'aurait pas de fenêtre et retomberait sur la valeur
+        // brute d'Apple, bien plus instable.
+        BatteryTime.primeAverage()
+
         // Resynchronisation quand la limite change ailleurs (Réglages Système,
         // Raccourcis). Le démon poste la notification quelle qu'en soit l'origine.
         ChargeLimit.observeChanges { [weak self] in self?.refreshTitle() }

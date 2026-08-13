@@ -218,7 +218,14 @@ thick far from the centre and vanishes near it, because a scale moves each edge
 outward in proportion to its distance rather than by a fixed amount.
 
 The cap comes from `battery-cap` too — it is a dome, flat against the body and
-bulging outward, not the uniform rounded bar it looks like at a glance. The
+bulging outward, not the uniform rounded bar it looks like at a glance.
+
+**One deliberate difference from the system icon.** macOS keeps showing the bolt
+whenever the machine is plugged in, including once charging has stopped at the
+limit — the icon then claims a charge that is not happening (`IsCharging = No`,
+`Amperage = 0`). This app draws `battery-plug` in that state instead, which is
+the glyph Apple ships for it. Bolt means charging, plug means plugged and idle,
+so the real state is readable from the menu bar without opening anything. The
 `battery-outline` image is the one piece not used: it is the hollow style the
 panel still uses, whereas the menu bar icon is a solid capsule.
 

@@ -21,14 +21,22 @@ enum BatteryGauge {
     /// Dôme visible du téton, et son écart au corps.
     private static let capVisible = NSSize(width: 1.5, height: 4.5)
     private static let capGap: CGFloat = 1.0
-    /// Hauteur à laquelle le système affiche l'éclair : il déborde du corps.
-    private static let boltVisibleHeight: CGFloat = 14
+    /// Hauteur à laquelle le système affiche l'éclair et la prise : ils débordent
+    /// du corps.
+    private static let overlayHeight: CGFloat = 14.5
+    /// Hauteur du canevas, tenue à un entier pour que le corps tombe sur un
+    /// multiple de 0,5 pt. À 15,5 l'origine vaut 1,75 et le corps se retrouve à
+    /// cheval sur la grille rétina : il est alors rendu sur 12,5 pt au lieu de 12.
+    private static let canvasHeight: CGFloat = 15
     /// Le corps vide et le téton sont atténués, la portion chargée est pleine.
     private static let dimmed: CGFloat = 0.4
 
-    static func image(level: Int, charging: Bool) -> NSImage {
+    /// `plugged` sans `charging` n'est pas un détail : c'est l'état normal une
+    /// fois la limite atteinte, et le système y affiche une prise plutôt qu'un
+    /// éclair. Sans ça, l'icône ne montre plus rien alors que le Mac est branché.
+    static func image(level: Int, charging: Bool, plugged: Bool = false) -> NSImage {
         let size = NSSize(width: bodySize.width + capGap + capVisible.width + 1,
-                          height: boltVisibleHeight + 1)
+                          height: canvasHeight)
         let image = NSImage(size: size)
         let originY = (size.height - bodySize.height) / 2
 
@@ -55,38 +63,70 @@ enum BatteryGauge {
             NSGraphicsContext.restoreGraphicsState()
         }
 
-        if charging { drawBolt(in: body) }
+        if charging {
+            drawOverlay(systemBolt, in: body)
+        } else if plugged {
+            drawOverlay(systemPlug, in: body)
+        }
 
         image.isTemplate = true
         return image
     }
 
-    /// L'éclair vient du symbole `bolt.fill` : c'est le dessin d'Apple lui-même,
-    /// donc inutile d'essayer de le retracer à la main.
-    ///
-    /// Il est cerné d'un liseré transparent qui laisse voir le fond, obtenu en
-    /// effaçant le glyphe décalé tout autour avant de le redessiner plein.
-    /// `.destinationOut` n'efface que là où la source est opaque, contrairement à
-    /// `.clear` qui viderait tout le rectangle.
-    ///
-    /// Le décalage circulaire est indispensable : agrandir le glyphe donnerait un
-    /// liseré d'épaisseur variable, épais loin du centre et quasi nul près de lui,
-    /// puisqu'une homothétie écarte les bords proportionnellement à leur distance
-    /// au centre. Seule une dilatation donne une épaisseur constante.
-    /// L'éclair et son détourage viennent du bundle de Contrôle : ce sont les
-    /// images d'Apple elles-mêmes, lues sur la machine au moment de l'affichage.
-    /// Rien n'est copié dans le dépôt, exactement comme pour un SF Symbol.
-    ///
-    /// Le masque est une version épaissie du glyphe, livrée telle quelle — donc
-    /// le liseré est celui du système au pixel près, au lieu d'être approché.
+    // Les glyphes viennent du bundle de Contrôle : ce sont les images d'Apple
+    // elles-mêmes, lues sur la machine au moment de l'affichage. Rien n'est copié
+    // dans le dépôt, exactement comme pour un SF Symbol.
+    //
+    // Chacun est livré avec son masque, une version épaissie du même dessin. Le
+    // liseré autour du glyphe est donc celui du système au pixel près, au lieu
+    // d'être approché à la main.
+
     private static let controlCentre = Bundle(path: "/System/Library/CoreServices/ControlCenter.app")
 
-    private static let systemBolt: (glyph: NSImage, mask: NSImage)? = {
-        guard let glyph = controlCentre?.image(forResource: "battery-bolt"),
-              let mask = controlCentre?.image(forResource: "battery-bolt-mask")
+    private static func systemGlyph(_ name: String) -> (glyph: NSImage, mask: NSImage, scale: CGFloat)? {
+        guard let glyph = controlCentre?.image(forResource: name),
+              let mask = controlCentre?.image(forResource: "\(name)-mask")
         else { return nil }
-        return (glyph, mask)
-    }()
+        // Chaque glyphe occupe sa boîte différemment — l'éclair fait 12 de haut,
+        // la prise 12,875 — donc un facteur commun en décalerait un. On mesure la
+        // hauteur réellement dessinée pour l'amener à celle qu'affiche le système.
+        let drawn = visibleHeight(of: glyph)
+        guard drawn > 0 else { return nil }
+        return (glyph, mask, overlayHeight / drawn)
+    }
+
+    /// Hauteur du dessin à l'intérieur de la boîte de l'image, marges exclues.
+    private static func visibleHeight(of image: NSImage) -> CGFloat {
+        let sampling: CGFloat = 4
+        guard let rep = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: Int(image.size.width * sampling),
+            pixelsHigh: Int(image.size.height * sampling),
+            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+            colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)
+        else { return 0 }
+
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+        image.draw(in: NSRect(origin: .zero,
+                              size: NSSize(width: image.size.width * sampling,
+                                           height: image.size.height * sampling)))
+        NSGraphicsContext.restoreGraphicsState()
+
+        var top = -1, bottom = -1
+        for y in 0..<rep.pixelsHigh {
+            for x in 0..<rep.pixelsWide where (rep.colorAt(x: x, y: y)?.alphaComponent ?? 0) > 0.05 {
+                if top < 0 { top = y }
+                bottom = y
+                break
+            }
+        }
+        return bottom < 0 ? 0 : CGFloat(bottom - top + 1) / sampling
+    }
+
+    private static let systemBolt = systemGlyph("battery-bolt")
+    /// Branché sans charger : le système montre une prise, pas un éclair.
+    private static let systemPlug = systemGlyph("battery-plug")
 
     private static let systemCap = controlCentre?.image(forResource: "battery-cap")
 
@@ -108,18 +148,17 @@ enum BatteryGauge {
                  from: .zero, operation: .sourceOver, fraction: 1)
     }
 
-    private static func drawBolt(in body: NSRect) {
-        if let systemBolt {
-            // L'asset mesure 12 de haut pour son glyphe visible, alors que le
-            // système l'affiche sur 14 : il l'agrandit, et c'est ce qui le fait
-            // dépasser du corps et épaissit son liseré d'autant.
-            let scale = boltVisibleHeight / 12.0
-            let size = NSSize(width: systemBolt.glyph.size.width * scale,
-                              height: systemBolt.glyph.size.height * scale)
+    private static func drawOverlay(_ pair: (glyph: NSImage, mask: NSImage, scale: CGFloat)?,
+                                    in body: NSRect) {
+        if let pair {
+            // Le système agrandit ces glyphes : c'est ce qui les fait dépasser du
+            // corps tout en épaississant leur liseré d'autant.
+            let size = NSSize(width: pair.glyph.size.width * pair.scale,
+                              height: pair.glyph.size.height * pair.scale)
             let box = NSRect(x: body.midX - size.width / 2, y: body.midY - size.height / 2,
                              width: size.width, height: size.height)
-            systemBolt.mask.draw(in: box, from: .zero, operation: .destinationOut, fraction: 1)
-            systemBolt.glyph.draw(in: box, from: .zero, operation: .sourceOver, fraction: 1)
+            pair.mask.draw(in: box, from: .zero, operation: .destinationOut, fraction: 1)
+            pair.glyph.draw(in: box, from: .zero, operation: .sourceOver, fraction: 1)
             return
         }
 

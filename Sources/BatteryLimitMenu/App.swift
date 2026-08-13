@@ -73,7 +73,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             button.toolTip = L("status.tooltip.unavailable")
             return
         }
-        button.image = BatteryGauge.image(level: gauge.level, charging: gauge.charging)
+        button.image = BatteryGauge.image(level: gauge.level, charging: gauge.charging,
+                                          plugged: gauge.plugged)
 
         if let limit = ChargeLimit.current() {
             button.toolTip = L("status.tooltip.full", gauge.level, limit)

@@ -37,6 +37,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        // Sans nom de sauvegarde, la position choisie par l'utilisateur — en
+        // cmd-glissant l'icône — serait oubliée à chaque lancement.
+        statusItem.autosaveName = "BatteryLimit"
         statusItem.button?.imagePosition = .imageOnly
 
         let menu = NSMenu()

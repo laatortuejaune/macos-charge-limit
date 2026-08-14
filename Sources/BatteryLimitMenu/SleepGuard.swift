@@ -17,7 +17,7 @@ import IOKit.pwr_mgt
 //    « clamshell » qui court-circuite les assertions. Le seul levier est
 //    `pmset -a disablesleep`, qui exige root. Plutôt qu'un helper privilégié,
 //    l'app s'appuie sur une règle sudoers posée une fois à la main par
-//    `Tools/install-sleep-helper.sh`, limitée à ces deux commandes exactes.
+//    `Tools/install-helper.sh`, limitée à ces deux commandes exactes.
 //    Sans cette règle, l'app fonctionne — elle couvre tout sauf le capot, et le
 //    dit.
 //

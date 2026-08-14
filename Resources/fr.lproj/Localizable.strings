@@ -57,7 +57,10 @@
 "icon.sleep.on" = "Veille empêchée — cliquer pour l'autoriser à nouveau";
 "icon.sleep.off" = "Empêcher le Mac de dormir";
 "icon.sleep.lid.on" = "Fonctionne aussi capot fermé.";
-"icon.sleep.lid.off" = "Capot fermé, le Mac dormira quand même — pour l'éviter : Tools/install-sleep-helper.sh";
+"icon.sleep.lid.off" = "Capot fermé, le Mac dormira quand même — pour l'éviter : Tools/install-helper.sh";
 "icon.lowpower" = "Mode économie : %@ — se change dans les Réglages Batterie (clic)";
 "icon.login" = "Lancement à l'ouverture de session : %@ — cliquer pour basculer";
 "icon.quit" = "Quitter (⌘Q)";
+"icon.lowpower.toggle" = "Mode économie : %@ — cliquer pour basculer";
+"error.lowPowerFailed" = "Impossible de changer le mode économie";
+"error.lowPowerFailedDetail" = "La règle privilégiée a peut-être été retirée. Relancer Tools/install-helper.sh.";

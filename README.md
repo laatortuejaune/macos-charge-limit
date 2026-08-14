@@ -290,17 +290,30 @@ privilege**: it ships no helper tool, no daemon, and nothing setuid. What it
 relies on instead is a sudoers rule you install once, by hand:
 
 ```bash
-Tools/install-sleep-helper.sh            # one sudo, once
-Tools/install-sleep-helper.sh uninstall  # and back out
+Tools/install-helper.sh            # one sudo, once
+Tools/install-helper.sh uninstall  # and back out
 ```
 
-What that grants is deliberately tiny — one account, two exact commands with
+The same rule also makes the **Low Power Mode** button in the menu live. Its
+setting has the same shape as the lid one: the private framework reads it fine
+but refuses to write from a third-party app (the daemon checks the caller's
+entitlement, `sudo` does not bypass it), and the only writable lever is
+`pmset -a lowpowermode`, root again. So the button reads the state for free, and
+toggles it through this rule when present — otherwise it just opens Battery
+Settings, exactly like the lid half.
+
+What the rule grants is deliberately tiny — one account, four exact commands with
 their arguments spelled out, so the right cannot be used to run `pmset` for
 anything else:
 
 ```
-you ALL=(root) NOPASSWD: /usr/bin/pmset -a disablesleep 1, /usr/bin/pmset -a disablesleep 0
+you ALL=(root) NOPASSWD: /usr/bin/pmset -a disablesleep 1, /usr/bin/pmset -a disablesleep 0, /usr/bin/pmset -a lowpowermode 1, /usr/bin/pmset -a lowpowermode 0
 ```
+
+Deciding whether the button may toggle needs care: `sudo -n -l <command>` says
+yes for any admin who *could* run it with a password, which is a false positive.
+The check reads the NOPASSWD listing itself and looks for `lowpowermode` there, so
+a missing rule reads as missing rather than as "allowed, then fails on click".
 
 The script validates the rule with `visudo -c` **before** installing it. That step
 is not optional: a typo in a `/etc/sudoers.d` file breaks `sudo` outright,
@@ -393,7 +406,7 @@ Resources/
   en.lproj, fr.lproj    English and French UI
 Tools/
   power-probe.swift     dumps the raw power keys; how the above was measured
-  install-sleep-helper.sh  the one-time sudoers rule for closed-lid coverage
+  install-helper.sh        the one-time sudoers rule for lid + low power
 build.sh                swift build + hand-assembled .app bundle
 ```
 

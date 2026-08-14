@@ -91,21 +91,15 @@ enum SleepGuard {
         held.removeAll()
     }
 
-    /// `true` si le Mac est tenu éveillé par *quelqu'un d'autre* que cette app.
-    ///
-    /// `IOPMCopyAssertionsStatus` compte pour tout le système, cette app comprise,
-    /// d'où la soustraction. Sans cette lecture, une case décochée affirmerait
-    /// « la veille n'est pas empêchée » à côté d'une machine qui ne dormira pas —
+    /// `true` si le Mac est tenu éveillé par *quelqu'un d'autre* que cette app —
     /// un `caffeinate` oublié dans un terminal, une visioconférence.
-    /// `nil` si le décompte est illisible : mieux vaut se taire qu'affirmer.
-    static func heldElsewhere() -> Bool? {
-        var counts: Unmanaged<CFDictionary>?
-        guard IOPMCopyAssertionsStatus(&counts) == kIOReturnSuccess,
-              let status = counts?.takeRetainedValue() as? [String: Any]
-        else { return nil }
-        let total = types.reduce(0) { $0 + ((status[$1] as? NSNumber)?.intValue ?? 0) }
-        return total - held.count > 0
-    }
+    ///
+    /// Sans cette lecture, une case décochée affirmerait « la veille n'est pas
+    /// empêchée » à côté d'une machine qui ne dormira pas. Le décompte passe par
+    /// `PowerAssertions` : la voie évidente, retrancher ses propres assertions du
+    /// total de `IOPMCopyAssertionsStatus`, se trompe toujours dans le même sens,
+    /// et le fichier dit pourquoi.
+    static func heldElsewhere() -> Bool? { PowerAssertions.heldByOthers(types) }
 
     // MARK: - Capot fermé
 

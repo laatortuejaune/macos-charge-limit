@@ -64,15 +64,8 @@ enum DisplayGuard {
     /// `true` si l'écran est tenu allumé par *quelqu'un d'autre* que cette app :
     /// une vidéo en lecture, une présentation, un `caffeinate -d` oublié.
     ///
-    /// Même raison que dans `SleepGuard` : sans cette lecture, une icône éteinte
-    /// affirmerait « l'écran va s'éteindre » devant un écran qui restera allumé.
-    /// `nil` si le décompte est illisible — mieux vaut se taire qu'affirmer.
-    static func heldElsewhere() -> Bool? {
-        var counts: Unmanaged<CFDictionary>?
-        guard IOPMCopyAssertionsStatus(&counts) == kIOReturnSuccess,
-              let status = counts?.takeRetainedValue() as? [String: Any]
-        else { return nil }
-        let total = (status[type] as? NSNumber)?.intValue ?? 0
-        return total - (held == nil ? 0 : 1) > 0
-    }
+    /// Sans cette lecture, une icône éteinte affirmerait « l'écran va s'éteindre »
+    /// devant un écran qui restera allumé. Le décompte passe par
+    /// `PowerAssertions`, qui explique pourquoi la voie évidente est fausse.
+    static func heldElsewhere() -> Bool? { PowerAssertions.heldByOthers([type]) }
 }

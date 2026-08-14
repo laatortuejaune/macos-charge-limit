@@ -282,7 +282,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let horizontal: CGFloat = 14, vertical: CGFloat = 6
         // Alignée sur la largeur du contrôle segmenté au-dessus, pour que les
         // icônes se répartissent sur la même étendue que les paliers.
-        let width = max(stripWidth, CGFloat(buttons.count) * 34)
+        // Le plancher doit inclure les marges : sans elles le pas calculé juste
+        // en dessous tombe sous la largeur d'un bouton et ils se chevauchent —
+        // un clic atterrit alors sur la mauvaise bascule, sans rien pour le dire.
+        let width = max(stripWidth, CGFloat(buttons.count) * 34 + horizontal * 2)
         let step = (width - horizontal * 2 - 34) / CGFloat(max(buttons.count - 1, 1))
         let container = NSView(frame: NSRect(x: 0, y: 0, width: width,
                                              height: 24 + vertical * 2))

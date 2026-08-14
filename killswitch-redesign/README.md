@@ -7,6 +7,23 @@ typographie système SF, matériaux translucides (backdrop-blur), mouvement
 « spring » iOS, profondeur, thèmes clair **et** sombre, et prise en charge de
 `reduced-motion` / `reduced-transparency` / `contrast`.
 
+Version « poste de contrôle » (v2), avec **toutes les fonctions d'origine
+conservées** :
+
+- **Vue d'ensemble** : tuiles de stats (joueurs en direct + mini-courbe,
+  scripts en ligne, exécutions, joueurs uniques).
+- **Filtres** (Tous / En ligne / Coupés) + **recherche** (côté client).
+- **Activité en direct** par script (accumulée depuis `/admin/api/presence`),
+  et **graphique d'exécutions** dans la fiche détails (barres, depuis les
+  horodatages des logs) avec sous-onglets **Statistiques / Code / Journaux**.
+- Grand titre repliable + bord de défilement translucide ; feuilles qui
+  **s'animent** à la fermeture et se **ferment au glissement** sur mobile
+  (vélocité + rebond).
+- Ajusté après un **audit design adversarial** (5 axes du skill) : contraste
+  AA dans les deux thèmes, cohérence des matériaux, graphiques honnêtes
+  (échelle ancrée à zéro, barres discrètes), gestion du focus, ARIA
+  (onglets, `aria-pressed`, `role=status`).
+
 Le **back-end n'est pas touché** : le client parle toujours à `/admin/api/*`,
 `/admin/login`, `/admin/logout`, `/admin/prototype`. Aucune route serveur, aucune
 base D1, aucun beacon n'a été modifié.
@@ -57,7 +74,10 @@ fonctionne sans changement.
 
 ## Vérifié
 
-Rendu au navigateur (Chromium) en clair et sombre, plus la feuille de détails, la
-feuille de création, la vue prototype et le mode mobile (feuille qui remonte du bas).
-Aucune erreur JS. Les pages générées par le drop-in sont identiques, au pixel près,
-à la prévisualisation.
+Rendu au navigateur (Chromium) en clair et sombre : vue d'ensemble, filtres,
+activité en direct, feuille de détails (graphique + sous-onglets), feuille de
+création, vue prototype, et mobile (feuille qui remonte du bas et se ferme au
+glissement). Aucune erreur JS. Le drop-in `worker/` a été rendu avec un `fetch`
+simulé reproduisant les réponses `/admin/api/*` : le tableau de bord se peuple
+correctement (tuiles, cartes, présence, fiche détails) — identique, au pixel
+près, à la prévisualisation.

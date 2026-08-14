@@ -34,6 +34,7 @@ enum Main {
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private var statusItem: NSStatusItem!
+    private var appearanceObserver: NSKeyValueObservation?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -61,6 +62,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // cet observateur elle resterait figée jusqu'à la prochaine ouverture
         // du menu.
         BatteryTime.observePowerChanges { [weak self] in self?.refreshTitle() }
+
+        // L'image du mode économie n'est plus *template* : le système ne la
+        // reteinte pas, c'est nous qui résolvons la couleur du tracé. Or au
+        // moment du premier rendu le bouton n'a pas encore rejoint la barre et
+        // répond « clair » même sous une barre sombre — la jauge sortirait noire
+        // sur fond noir. Un délai fixe serait un pari ; observer l'apparence
+        // couvre à la fois cette stabilisation et les bascules clair/sombre.
+        appearanceObserver = statusItem.button?.observe(\.effectiveAppearance) { [weak self] _, _ in
+            DispatchQueue.main.async { self?.refreshTitle() }
+        }
 
         // `disablesleep` survit à l'app : s'il traîne d'un lancement qui s'est mal
         // terminé, on le reprend en main plutôt que de l'ignorer. Sinon le menu
@@ -90,7 +101,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return
         }
         button.image = BatteryGauge.image(level: gauge.level, charging: gauge.charging,
-                                          plugged: gauge.plugged)
+                                          plugged: gauge.plugged,
+                                          lowPower: BatteryTime.lowPowerMode() == true,
+                                          appearance: button.effectiveAppearance)
 
         var tip: String
         if let limit = ChargeLimit.current() {

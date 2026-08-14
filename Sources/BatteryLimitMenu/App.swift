@@ -81,6 +81,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // terminé, on le reprend en main plutôt que de l'ignorer. Sinon le menu
         // afficherait une case décochée devant un Mac qui ne dort plus.
         SleepGuard.adoptSystemState()
+
+        // Même logique pour la suspension de charge, avec un enjeu plus lourd :
+        // laissée derrière, elle vide la batterie au lieu de simplement empêcher
+        // la veille. On relâche donc si le niveau est déjà sous le plancher.
+        ChargeInhibit.enforceFloor()
     }
 
     /// Dernier filet. Les assertions se relâchent seules à la mort du processus,
@@ -93,6 +98,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // la fait disparaître de `pmset -g assertions` tout de suite plutôt qu'à
         // la faveur du ramassage, ce qui rend le diagnostic honnête.
         DisplayGuard.release()
+        // Celle-ci survivrait au processus, comme `disablesleep`, mais sa
+        // conséquence est pire : un Mac branché qui ne se recharge plus.
+        ChargeInhibit.releaseAll()
     }
 
     // MARK: - Barre de menu
@@ -108,13 +116,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             button.toolTip = L("status.tooltip.unavailable")
             return
         }
-        button.image = BatteryGauge.image(level: gauge.level, charging: gauge.charging,
+        // Vérifié à chaque rafraîchissement et avant de dessiner : la batterie
+        // passe le plancher pendant que l'app tourne, pas avant, et l'icône ne
+        // doit pas montrer un état qu'on vient d'annuler.
+        ChargeInhibit.enforceFloor()
+
+        let limit = ChargeLimit.current()
+        button.image = BatteryGauge.image(level: gauge.level,
+                                          charging: gauge.charging || willCharge(gauge, limit),
                                           plugged: gauge.plugged,
                                           lowPower: BatteryTime.lowPowerMode() == true,
                                           appearance: button.effectiveAppearance)
 
         var tip: String
-        if let limit = ChargeLimit.current() {
+        if let limit {
             tip = L("status.tooltip.full", gauge.level, limit)
         } else {
             tip = L("status.tooltip", gauge.level)
@@ -124,6 +139,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // jauge pour ne pas s'allonger.
         if SleepGuard.isActive { tip += "\n" + L("sleep.tooltipActive") }
         button.toolTip = tip
+    }
+
+    /// La charge ne démarre pas à l'instant où l'on branche : mesuré sur trois
+    /// cycles, elle a mis 36, 45 et 62 secondes. Pendant tout ce temps le système
+    /// rapporte « branché, pas en charge », et l'icône affichait donc une prise
+    /// avant de basculer sur l'éclair — un changement qui ressemble à une
+    /// hésitation alors que rien n'a changé côté machine.
+    ///
+    /// Or l'issue est connue d'avance : sous la limite le Mac va charger, au-dessus
+    /// il ne chargera pas. Autant l'afficher tout de suite. C'est un pari, mais un
+    /// pari sur une règle que l'app connaît — et il se corrige seul au
+    /// rafraîchissement suivant s'il se trouvait faux, par exemple sur un
+    /// chargeur trop faible.
+    ///
+    /// Sans limite lisible on ne parie sur rien : l'icône reste le reflet exact
+    /// de ce que dit le système.
+    /// La suspension de charge annule le pari : elle empêche la charge quel que
+    /// soit le niveau, donc parier sur l'éclair afficherait un mensonge durable
+    /// au lieu d'une avance de quelques secondes.
+    private func willCharge(_ gauge: (level: Int, charging: Bool, plugged: Bool),
+                            _ limit: Int?) -> Bool {
+        guard gauge.plugged, !gauge.charging, let limit else { return false }
+        guard ChargeInhibit.isActive() != true else { return false }
+        return gauge.level < limit
     }
 
     // MARK: - Menu
@@ -262,6 +301,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     tooltip: L(canToggle ? "icon.lowpower.toggle" : "icon.lowpower", state),
                     action: canToggle ? #selector(toggleLowPower) : #selector(openBatterySettings))
             } ?? nil,
+            // Absent des machines dont le SMC n'expose pas la clé : mieux vaut
+            // pas de bouton qu'un bouton qui ne fait rien.
+            ChargeInhibit.isSupported ? {
+                let held = ChargeInhibit.isActive() == true
+                let canToggle = ChargeInhibit.canToggle()
+                return iconButton(
+                    symbol: held ? "bolt.slash.fill" : "bolt.slash",
+                    active: held,
+                    tooltip: inhibitTooltip(held: held, canToggle: canToggle),
+                    action: canToggle ? #selector(toggleChargeInhibit) : #selector(openBatterySettings))
+            }() : nil,
             iconButton(symbol: "app.badge.checkmark",
                        active: loginOn,
                        tooltip: L("icon.login", L(loginOn ? "panel.on" : "panel.off")),
@@ -350,6 +400,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         // Le tooltip porte l'état de la veille : sans ça il resterait sur la
         // valeur d'avant jusqu'au prochain changement d'alimentation.
+        refreshTitle()
+    }
+
+    /// L'infobulle porte ce que l'icône ne peut pas dire : le niveau plancher,
+    /// et le fait que le réglage survivrait à l'app si elle était tuée.
+    private func inhibitTooltip(held: Bool, canToggle: Bool) -> String {
+        var lines = [L(held ? "icon.inhibit.on" : "icon.inhibit.off")]
+        if !canToggle { lines.append(L("icon.inhibit.helper")) }
+        else if held { lines.append(L("icon.inhibit.floor", ChargeInhibit.floor)) }
+        return lines.joined(separator: "\n")
+    }
+
+    @objc private func toggleChargeInhibit() {
+        statusItem.menu?.cancelTracking()
+        // Relu plutôt que mémorisé : le réglage vit dans le SMC, donc il a pu
+        // changer depuis un terminal entre l'ouverture du menu et le clic.
+        let target = !(ChargeInhibit.isActive() ?? false)
+        if !ChargeInhibit.set(target) {
+            warn(L("error.inhibitFailed"),
+                 L(target ? "error.inhibitFailedDetail" : "error.inhibitReleaseDetail",
+                   ChargeInhibit.floor))
+        }
         refreshTitle()
     }
 

@@ -247,6 +247,54 @@ consulted part of the panel.
 To hide Apple's own battery icon, turn it off in System Settings → Control Centre
 → Battery.
 
+### Preventing sleep, and where it stops
+
+`caffeinate` is not a mechanism of its own: it holds IOKit power assertions and
+then waits. `IOPMAssertionCreateWithName` is public and needs no privilege, which
+puts it in the same family as everything else here — ask the system, don't go
+around it. No helper tool, no root.
+
+Two assertions are held together, because holding only the first leaves a gap:
+
+| Assertion | Covers |
+| --- | --- |
+| `PreventUserIdleSystemSleep` | the idle timer from Battery Settings |
+| `PreventSystemSleep` | system sleep while power is connected |
+
+They are held or dropped as a pair. A partial state — idle sleep blocked but
+system sleep not — is real, and no checkmark can represent it honestly, so a
+refusal on either one rolls the other back and reports the failure.
+
+**It does not cover a closed lid.** Closing the display triggers clamshell sleep,
+which overrides held assertions; the only known lever is
+`sudo pmset -a disablesleep 1`, which requires root. That puts it out of reach
+by construction, and the stop is deliberate rather than an oversight: reaching it
+would mean shipping a privileged helper, which costs more than the feature is
+worth in an app whose entire point is that it needs no privilege.
+
+> Unlike the rest of this file, that paragraph is **not** measured on the
+> machine — it is the documented behaviour, not an observation. Treat it as
+> unverified until someone runs the check.
+
+The assertions carry a name, so the toggle is auditable from a terminal without
+having to trust the checkmark:
+
+```
+$ pmset -g assertions
+   PreventUserIdleSystemSleep     1  BatteryLimitMenu
+   PreventSystemSleep             1  BatteryLimitMenu
+```
+
+The menu also reads `IOPMCopyAssertionsStatus`, which counts assertions across
+the whole system, and subtracts its own. That is what lets it tell *"I am holding
+this"* apart from *"something else is"* — a `caffeinate` forgotten in a terminal,
+a video call. Without it, an unchecked box would be claiming the Mac is free to
+sleep while it plainly isn't.
+
+Assertions die with the process that holds them, so quitting the app releases
+them — no Mac left awake by something that is no longer running. The flip side is
+that the state cannot carry across launches, so the toggle starts off every time.
+
 ### About the Shortcuts route
 
 macOS 26.4 also added a `SetBatteryChargeLimitAction` Shortcuts action — it is in
@@ -279,6 +327,8 @@ below the version where the setting exists.
 Sources/BatteryLimitMenu/
   ChargeLimit.swift     the PowerUI bridge: read, write, change notification
   BatteryTime.swift     time remaining, and the estimate to the limit
+  BatteryGauge.swift    the drawn gauge, and the system glyphs it borrows
+  SleepGuard.swift      the sleep-prevention toggle: IOKit power assertions
   App.swift             the menu bar UI
 Resources/
   Info.plist            LSUIElement — no Dock icon, no window

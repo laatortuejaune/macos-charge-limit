@@ -56,8 +56,8 @@
 "tooltip.limit" = "Charge limit: %d%%";
 "icon.sleep.on" = "Sleep is being prevented — click to allow it again";
 "icon.sleep.off" = "Prevent the Mac from sleeping";
-"icon.sleep.lid.on" = "Closed lid: covered.";
-"icon.sleep.lid.off" = "Closed lid: NOT covered — install the rule with Tools/install-sleep-helper.sh";
+"icon.sleep.lid.on" = "Also works with the lid closed.";
+"icon.sleep.lid.off" = "With the lid closed the Mac will still sleep — to change that: Tools/install-sleep-helper.sh";
 "icon.lowpower" = "Low Power Mode: %@ — changed in Battery Settings (click)";
 "icon.login" = "Launch at Login: %@ — click to toggle";
 "icon.quit" = "Quit (⌘Q)";

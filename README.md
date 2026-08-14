@@ -365,12 +365,21 @@ redraw. Without it the gauge stayed white with the mode plainly on.
 #### What Low Power Mode actually costs, measured
 
 A synthetic benchmark was run on an idle machine (A18 Pro, 2 performance + 4
-efficiency cores) — fixed thread counts pinned to a core type by QoS class, four
+efficiency cores) — fixed thread counts, each phase requesting a QoS class, four
 rounds in mirrored OFF/ON/ON/OFF order so any drift cancels. It answered one of
 the two questions and failed the other, and both are worth recording.
 
-**It measured the performance cost.** Two independent passes per condition, on
-the two performance cores:
+**It measured the performance cost** of a two-thread `userInteractive` workload:
+
+> Worth stating plainly, because the obvious reading of the table is wrong: QoS
+> **requests** a scheduling class, it does not pin a thread to a core type. Only
+> `QOS_CLASS_BACKGROUND` is confined to the efficiency cores — measured here at
+> 3 047 blocks against 10 055 for `userInteractive` over the same 8 seconds —
+> while the classes above it are a bias the kernel is free to override. Since
+> moving work onto the efficiency cores is *itself* one of the things Low Power
+> Mode does, the figure below may combine a frequency cap with a migration. Core
+> placement was requested and never observed, so this is the cost of the
+> workload, not a measured per-core-type cost.
 
 | Mode | pass 1 | pass 2 | mean |
 | --- | --- | --- | --- |
@@ -389,13 +398,28 @@ scale:
 | --- | --- |
 | `PowerTelemetryData` accumulator | freezes under CPU load — 9 of 10 samples identical |
 | `TrueRemainingCapacity` delta | steps too coarse: `0 mA` over 170-second phases |
-| `Amperage` / `InstantAmperage` | stale — one distinct value in 40 s, and *lower* under load than at idle |
+| `Amperage` / `InstantAmperage` | republishes roughly once every 20 s — one or two distinct values per 40 s window |
 
-The last one is the clearest: the controller reported 580 mA idle and 133 mA
-while both performance cores were saturated. A battery gauge is not an instrument
-at minute resolution. `powermetrics` would answer it, but it needs root, so the
-question stays open rather than being answered with a number that looks precise
-and is not.
+The third one deserves a correction, because the first version of this section
+got it wrong. `Amperage` was written up as reporting a *lower* draw under load
+than at idle — which would have made it nonsense rather than merely coarse. It
+does not. Re-measured with the sign kept and the power state recorded (on
+battery, screen off):
+
+```
+rest                     -97 mA
+two userInteractive      -645 mA mean, spanning -97 to -1410
+```
+
+Negative is discharge, and the draw rises under load exactly as it should. The
+earlier figure came from averaging magnitudes over a window that contained one or
+two republished values, so the load phase averaged a stale reading from before
+the workload ramped. The signal is directionally right; it simply updates far too
+slowly for a 170-second phase to be resolved against its neighbour.
+
+A battery gauge is not an instrument at minute resolution. `powermetrics` would
+answer it, but it needs root, so the question stays open rather than being
+answered with a number that looks precise and is not.
 
 This is also, incidentally, the justification for how `BatteryTime` smooths over
 long windows. That was not excess caution.

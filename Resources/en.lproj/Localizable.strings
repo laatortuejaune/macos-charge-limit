@@ -1,5 +1,4 @@
 /* Menu header */
-"menu.header" = "Charge Limit";
 "menu.unsupported" = "Charge limit not supported";
 
 /* A selectable level, e.g. "80%" */
@@ -7,8 +6,6 @@
 
 "menu.noLimitHint" = "100% means no limit at all";
 
-"menu.launchAtLogin" = "Launch at Login";
-"menu.quit" = "Quit";
 
 /* Status bar title. Leading space separates it from the icon. */
 "status.title" = " %d%%";
@@ -43,17 +40,24 @@
 "panel.source" = "Power Source: %@";
 "panel.source.adapter" = "Power Adapter";
 "panel.source.battery" = "Battery";
-"panel.lowPower" = "Low Power Mode: %@";
 "panel.on" = "On";
 "panel.off" = "Off";
 "panel.settings" = "Battery Settings…";
 "battery.adapterTooWeak" = "Adapter can’t keep up";
 
 /* Sleep prevention. Holds IOKit power assertions — see SleepGuard.swift. */
-"sleep.prevent" = "Prevent Sleep";
 "sleep.elsewhere" = "Also kept awake by another app";
-"sleep.lidCovered" = "Including a closed lid";
-"sleep.lidUncovered" = "Except with a closed lid — see Tools/install-sleep-helper.sh";
 "sleep.tooltipActive" = "Sleep prevented";
 "error.sleepGuardFailed" = "Couldn’t prevent sleep";
 "error.sleepGuardFailedDetail" = "The system refused the power assertion.";
+
+/* Compact icon row and hover tooltips */
+"menu.limitHint" = "Limit charging to %d%%";
+"tooltip.limit" = "Charge limit: %d%%";
+"icon.sleep.on" = "Sleep is being prevented — click to allow it again";
+"icon.sleep.off" = "Prevent the Mac from sleeping";
+"icon.sleep.lid.on" = "Closed lid: covered.";
+"icon.sleep.lid.off" = "Closed lid: NOT covered — install the rule with Tools/install-sleep-helper.sh";
+"icon.lowpower" = "Low Power Mode: %@ — changed in Battery Settings (click)";
+"icon.login" = "Launch at Login: %@ — click to toggle";
+"icon.quit" = "Quit (⌘Q)";

@@ -109,64 +109,55 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     /// Reconstruit le menu à chaque ouverture : l'état affiché est relu au moment
     /// où tu le regardes, même si une notification avait été manquée.
+    ///
+    /// Trois rangées, pas plus. La ligne d'état, les paliers, puis une rangée
+    /// d'icônes — le détail (source d'alimentation, couverture de la veille,
+    /// mode économie…) vit dans les infobulles, au survol. Le menu est passé de
+    /// onze lignes de texte à ça quand chaque feature a cessé d'ajouter la sienne.
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
 
         let gauge = BatteryTime.gauge()
         let current = ChargeLimit.isSupported ? ChargeLimit.current() : nil
 
-        // Même ossature que le panneau batterie de macOS — titre et pourcentage,
-        // source d'alimentation, état de charge, mode économie, accès aux
-        // réglages — pour qu'on puisse masquer celui du système sans rien perdre.
-        menu.addItem(titleRow(L("panel.title"),
-                              gauge.map { L("menu.level", $0.level) } ?? "—"))
-        if let gauge {
-            menu.addItem(header(L("panel.source",
-                                  L(gauge.plugged ? "panel.source.adapter"
-                                                  : "panel.source.battery"))))
-        }
-        if let summary = BatteryTime.summary(limit: current) {
-            menu.addItem(header(summary))
-        }
-
+        // Les paliers d'abord : c'est eux qui fixent la largeur du menu, dont la
+        // ligne d'état et la rangée d'icônes ont besoin pour se caler.
+        let limits = ChargeLimit.isSupported
+            ? limitsItem(current: current, limits: ChargeLimit.availableLimits())
+            : header(L("menu.unsupported"))
+        menu.addItem(statusRow(gauge: gauge, limit: current))
+        menu.addItem(limits)
         menu.addItem(.separator())
-        if ChargeLimit.isSupported {
-            menu.addItem(header(L("menu.header")))
-            menu.addItem(limitsItem(current: current, limits: ChargeLimit.availableLimits()))
-        } else {
-            menu.addItem(header(L("menu.unsupported")))
-        }
+        menu.addItem(iconStrip())
 
-        if let low = BatteryTime.lowPowerMode() {
-            menu.addItem(.separator())
-            // Lecture seule : le clic renvoie aux Réglages, seul endroit où le
-            // basculer sans le droit système qui nous manque.
-            let item = NSMenuItem(title: L("panel.lowPower", L(low ? "panel.on" : "panel.off")),
-                                  action: #selector(openBatterySettings), keyEquivalent: "")
-            item.target = self
-            menu.addItem(item)
-        }
-
-        menu.addItem(.separator())
-        menu.addItem(sleepItem())
-        if let detail = sleepDetailItem() { menu.addItem(detail) }
-        // Signalé seulement quand ça vient d'ailleurs : sinon la coche décochée
-        // affirmerait « la veille n'est pas empêchée » à côté d'un Mac qui ne
-        // dormira pas — un caffeinate oublié dans un terminal, une visio.
-        if SleepGuard.heldElsewhere() == true {
-            menu.addItem(header(L("sleep.elsewhere")))
-        }
-
-        menu.addItem(.separator())
-        menu.addItem(loginItem())
-        let settings = NSMenuItem(title: L("panel.settings"),
-                                  action: #selector(openBatterySettings), keyEquivalent: "")
-        settings.target = self
-        menu.addItem(settings)
-        menu.addItem(.separator())
-        menu.addItem(quitItem())
+        // La rangée d'icônes a englouti « Quitter », mais ⌘Q doit continuer de
+        // marcher menu ouvert : un item invisible porte le raccourci.
+        let quit = NSMenuItem(title: L("icon.quit"),
+                              action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        quit.isHidden = true
+        quit.allowsKeyEquivalentWhenHidden = true
+        menu.addItem(quit)
 
         refreshTitle()
+    }
+
+    /// « Batterie » à gauche ; niveau et état de charge à droite. Le reste —
+    /// source d'alimentation, limite — est dans l'infobulle.
+    private func statusRow(gauge: (level: Int, charging: Bool, plugged: Bool)?,
+                           limit: Int?) -> NSMenuItem {
+        var right = gauge.map { L("menu.level", $0.level) } ?? "—"
+        if let summary = BatteryTime.summary(limit: limit) {
+            right += "  ·  " + summary
+        }
+        let item = titleRow(L("panel.title"), right)
+
+        if let gauge {
+            var lines = [L("panel.source", L(gauge.plugged ? "panel.source.adapter"
+                                                           : "panel.source.battery"))]
+            if let limit { lines.append(L("tooltip.limit", limit)) }
+            item.toolTip = lines.joined(separator: "\n")
+        }
+        return item
     }
 
     /// Les paliers sur une seule ligne, dans un contrôle segmenté. Un `NSMenuItem`
@@ -181,7 +172,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         control.selectedSegment = -1
         for (index, limit) in limits.enumerated() {
             control.setTag(limit, forSegment: index)
-            if limit >= 100 { control.setToolTip(L("menu.noLimitHint"), forSegment: index) }
+            control.setToolTip(limit >= 100 ? L("menu.noLimitHint") : L("menu.limitHint", limit),
+                               forSegment: index)
             if limit == current { control.selectedSegment = index }
         }
         control.sizeToFit()
@@ -191,6 +183,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let container = NSView(frame: NSRect(x: 0, y: 0,
                                              width: control.frame.width + horizontal * 2,
                                              height: control.frame.height + vertical * 2))
+        stripWidth = container.frame.width
         control.setFrameOrigin(NSPoint(x: horizontal, y: vertical))
         container.addSubview(control)
 
@@ -212,32 +205,99 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         refreshTitle()
     }
 
-    // MARK: - Veille
+    // MARK: - Rangée d'icônes
 
-    /// La coche reflète ce que *cette* app tient, pas l'état global du système :
-    /// c'est ce que le clic va basculer, donc c'est ce qu'elle doit annoncer. Le
-    /// reste est dit par les lignes qui suivent.
-    private func sleepItem() -> NSMenuItem {
-        let item = NSMenuItem(title: L("sleep.prevent"),
-                              action: #selector(toggleSleepGuard), keyEquivalent: "")
-        item.target = self
-        item.state = SleepGuard.isActive ? .on : .off
+    /// Veille, mode économie, lancement à l'ouverture, réglages, quitter : cinq
+    /// icônes sur une rangée. L'état se lit à la teinte (accentuée = actif), le
+    /// détail à l'infobulle. Les glyphes sont choisis pour se passer de légende :
+    /// lune, feuille, app cochée, engrenage, croix.
+    private func iconStrip() -> NSMenuItem {
+        let sleepActive = SleepGuard.isActive
+        let lowPower = BatteryTime.lowPowerMode()
+        let loginOn = SMAppService.mainApp.status == .enabled
+
+        let buttons = [
+            iconButton(symbol: sleepActive ? "moon.fill" : "moon",
+                       active: sleepActive,
+                       tooltip: sleepTooltip(active: sleepActive),
+                       action: #selector(toggleSleepGuard)),
+            lowPower.map { on in
+                iconButton(symbol: on ? "leaf.fill" : "leaf",
+                           active: on,
+                           tooltip: L("icon.lowpower", L(on ? "panel.on" : "panel.off")),
+                           action: #selector(openBatterySettings))
+            } ?? nil,
+            iconButton(symbol: "app.badge.checkmark",
+                       active: loginOn,
+                       tooltip: L("icon.login", L(loginOn ? "panel.on" : "panel.off")),
+                       action: #selector(toggleLoginItem)),
+            iconButton(symbol: "gearshape",
+                       active: false,
+                       tooltip: L("panel.settings"),
+                       action: #selector(openBatterySettings)),
+            iconButton(symbol: "xmark.circle",
+                       active: false,
+                       tooltip: L("icon.quit"),
+                       action: #selector(quitClicked)),
+        ].compactMap { $0 }
+
+        // Placement manuel : dans un menu, sans Auto Layout, une NSStackView
+        // n'étale pas ses vues — elle les compacte à gauche. Répartir soi-même
+        // est trivial et déterministe.
+        let horizontal: CGFloat = 14, vertical: CGFloat = 6
+        // Alignée sur la largeur du contrôle segmenté au-dessus, pour que les
+        // icônes se répartissent sur la même étendue que les paliers.
+        let width = max(stripWidth, CGFloat(buttons.count) * 34)
+        let step = (width - horizontal * 2 - 34) / CGFloat(max(buttons.count - 1, 1))
+        let container = NSView(frame: NSRect(x: 0, y: 0, width: width,
+                                             height: 24 + vertical * 2))
+        for (index, button) in buttons.enumerated() {
+            button.setFrameOrigin(NSPoint(x: horizontal + CGFloat(index) * step, y: vertical))
+            container.addSubview(button)
+        }
+
+        let item = NSMenuItem()
+        item.view = container
         return item
     }
 
-    /// Ce que la coche ne peut pas dire à elle seule : jusqu'où va la couverture.
-    /// Une case cochée devant un Mac qui s'endort quand même dès qu'on rabat
-    /// l'écran serait un mensonge par omission, et c'est justement le cas par
-    /// défaut tant que la règle sudoers n'est pas posée.
-    private func sleepDetailItem() -> NSMenuItem? {
-        switch SleepGuard.coverage() {
-        case .off:      return nil
-        case .full:     return header(L("sleep.lidCovered"))
-        case .idleOnly: return header(L("sleep.lidUncovered"))
-        }
+    /// Largeur du menu imposée par la rangée des paliers ; mémorisée par
+    /// `limitsItem` pour que la rangée d'icônes s'étale pareil.
+    private var stripWidth: CGFloat = 0
+
+    private func iconButton(symbol: String, active: Bool, tooltip: String,
+                            action: Selector) -> NSButton? {
+        // `guard` et non `!` : un nom de symbole disparu d'une future version de
+        // macOS coûterait un bouton, pas un plantage au premier menu ouvert.
+        guard let image = NSImage(systemSymbolName: symbol, accessibilityDescription: tooltip)?
+            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 15, weight: .regular))
+        else { return nil }
+        let button = NSButton(image: image, target: self, action: action)
+        button.isBordered = false
+        button.setButtonType(.momentaryChange)
+        button.toolTip = tooltip
+        button.contentTintColor = active ? .controlAccentColor : nil
+        button.setFrameSize(NSSize(width: 34, height: 24))
+        return button
+    }
+
+    /// Tout ce que les anciennes lignes de texte disaient, condensé au survol :
+    /// état, couverture du capot, et qui d'autre tient le Mac éveillé.
+    private func sleepTooltip(active: Bool) -> String {
+        var lines = [L(active ? "icon.sleep.on" : "icon.sleep.off")]
+        lines.append(L(SleepGuard.canCoverLid() ? "icon.sleep.lid.on" : "icon.sleep.lid.off"))
+        if SleepGuard.heldElsewhere() == true { lines.append(L("sleep.elsewhere")) }
+        return lines.joined(separator: "\n")
+    }
+
+    @objc private func quitClicked(_ sender: NSButton) {
+        sender.enclosingMenuItem?.menu?.cancelTracking()
+        NSApp.terminate(nil)
     }
 
     @objc private func toggleSleepGuard() {
+        // Les actions de la rangée d'icônes ne ferment pas le menu d'elles-mêmes.
+        statusItem.menu?.cancelTracking()
         if case .refused = SleepGuard.toggle() {
             warn(L("error.sleepGuardFailed"), L("error.sleepGuardFailedDetail"))
         }
@@ -248,15 +308,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     // MARK: - Lancement à l'ouverture de session
 
-    private func loginItem() -> NSMenuItem {
-        let item = NSMenuItem(title: L("menu.launchAtLogin"),
-                              action: #selector(toggleLoginItem), keyEquivalent: "")
-        item.target = self
-        item.state = SMAppService.mainApp.status == .enabled ? .on : .off
-        return item
-    }
-
     @objc private func toggleLoginItem() {
+        statusItem.menu?.cancelTracking()
         let service = SMAppService.mainApp
         do {
             // `.requiresApproval` signifie que l'utilisateur a désactivé l'app dans
@@ -278,7 +331,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// sur mesure.
     private func titleRow(_ left: String, _ right: String) -> NSMenuItem {
         let paragraph = NSMutableParagraphStyle()
-        paragraph.tabStops = [NSTextTab(textAlignment: .right, location: 200)]
+        // Le taquet cale la partie droite juste avant le bord du contrôle
+        // segmenté, qui impose la largeur du menu.
+        paragraph.tabStops = [NSTextTab(textAlignment: .right, location: max(stripWidth - 14, 200))]
         let item = NSMenuItem()
         item.attributedTitle = NSAttributedString(
             string: "\(left)\t\(right)",
@@ -289,6 +344,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func openBatterySettings() {
+        statusItem.menu?.cancelTracking()
         NSWorkspace.shared.open(
             URL(string: "x-apple.systempreferences:com.apple.Battery-Settings.extension")!)
     }
@@ -297,10 +353,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
         item.isEnabled = false
         return item
-    }
-
-    private func quitItem() -> NSMenuItem {
-        NSMenuItem(title: L("menu.quit"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
     }
 
     private func warn(_ message: String, _ detail: String) {

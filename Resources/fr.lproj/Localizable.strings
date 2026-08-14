@@ -1,5 +1,4 @@
 /* Menu header */
-"menu.header" = "Limite de charge";
 "menu.unsupported" = "Limite de charge non prise en charge";
 
 /* Un palier sélectionnable, ex. « 80 % ». Espace insécable avant le %. */
@@ -7,8 +6,6 @@
 
 "menu.noLimitHint" = "100 % revient à ne pas limiter du tout";
 
-"menu.launchAtLogin" = "Lancer à l'ouverture de session";
-"menu.quit" = "Quitter";
 
 /* Titre dans la barre de menu. L'espace initial le sépare de l'icône. */
 "status.title" = " %d %%";
@@ -43,17 +40,24 @@
 "panel.source" = "Alimentation : %@";
 "panel.source.adapter" = "Adaptateur secteur";
 "panel.source.battery" = "Batterie";
-"panel.lowPower" = "Mode économie : %@";
 "panel.on" = "activé";
 "panel.off" = "désactivé";
 "panel.settings" = "Réglages Batterie…";
 "battery.adapterTooWeak" = "L’adaptateur ne suit pas";
 
 /* Empêchement de la veille. Assertions d'alimentation IOKit — cf. SleepGuard.swift. */
-"sleep.prevent" = "Empêcher la veille";
 "sleep.elsewhere" = "Également maintenu éveillé par une autre app";
-"sleep.lidCovered" = "Capot fermé compris";
-"sleep.lidUncovered" = "Sauf capot fermé — cf. Tools/install-sleep-helper.sh";
 "sleep.tooltipActive" = "Veille empêchée";
 "error.sleepGuardFailed" = "Impossible d’empêcher la veille";
 "error.sleepGuardFailedDetail" = "Le système a refusé l’assertion d’alimentation.";
+
+/* Rangée d'icônes compacte et infobulles au survol */
+"menu.limitHint" = "Limiter la charge à %d %%";
+"tooltip.limit" = "Limite de charge : %d %%";
+"icon.sleep.on" = "Veille empêchée — cliquer pour l'autoriser à nouveau";
+"icon.sleep.off" = "Empêcher le Mac de dormir";
+"icon.sleep.lid.on" = "Capot fermé : couvert.";
+"icon.sleep.lid.off" = "Capot fermé : NON couvert — poser la règle avec Tools/install-sleep-helper.sh";
+"icon.lowpower" = "Mode économie : %@ — se change dans les Réglages Batterie (clic)";
+"icon.login" = "Lancement à l'ouverture de session : %@ — cliquer pour basculer";
+"icon.quit" = "Quitter (⌘Q)";

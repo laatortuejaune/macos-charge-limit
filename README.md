@@ -4,12 +4,15 @@ A small macOS menu bar app to read and change the built-in **battery charge
 limit** — 80 / 85 / 90 / 95 / 100 % — without opening System Settings.
 
 <p align="center">
-  <img src="docs/menu.png" width="281" alt="The menu, mirroring the macOS battery panel, with a charge-limit segmented control added">
+  <img src="docs/menu.png" width="291" alt="The compact menu: status line, charge-limit segments, and an icon row for sleep, low power, login, settings and quit">
 </p>
 
-It mirrors the macOS battery menu — same drawn gauge, same panel layout — with
-the charge limit added to it, so you can turn Apple's own battery icon off and
-stop having two of them side by side.
+It replaces the macOS battery menu — same drawn gauge in the menu bar — so you
+can turn Apple's own battery icon off and stop having two of them side by side.
+The menu itself is three rows: a status line, the charge-limit segments, and a
+row of icons (prevent sleep, Low Power Mode, launch at login, settings, quit).
+Everything else — power source, sleep coverage, who else is keeping the Mac
+awake — lives in tooltips, on hover.
 
 ## Why
 

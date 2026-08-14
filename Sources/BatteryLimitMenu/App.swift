@@ -63,6 +63,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // du menu.
         BatteryTime.observePowerChanges { [weak self] in self?.refreshTitle() }
 
+        // Le mode économie teinte la jauge en jaune : il peut changer depuis les
+        // Réglages ou tout seul en batterie faible, pas seulement depuis ce menu.
+        BatteryTime.observeLowPowerChanges { [weak self] in self?.refreshTitle() }
+
         // L'image du mode économie n'est plus *template* : le système ne la
         // reteinte pas, c'est nous qui résolvons la couleur du tracé. Or au
         // moment du premier rendu le bouton n'a pas encore rejoint la barre et

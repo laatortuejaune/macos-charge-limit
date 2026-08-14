@@ -167,15 +167,21 @@ enum BatteryGauge {
         // est à droite — donc le bord de la boîte donne directement l'écart voulu.
         let box = NSRect(x: body.maxX + capGap, y: body.midY - cap.size.height / 2,
                          width: cap.size.width, height: cap.size.height)
-        cap.draw(in: box, from: .zero, operation: .sourceOver, fraction: 1)
 
-        // Hors mode template, le dôme resterait noir : le système ne le reteinte
-        // plus. `.sourceAtop` ne peint que là où il est déjà opaque, et la boîte
-        // est hors du corps, donc rien d'autre n'est touché.
-        if ink != .black {
-            ink.withAlphaComponent(dimmed).setFill()
-            box.fill(using: .sourceAtop)
+        guard ink != .black else {
+            // Mode template : le système teinte, on dessine tel quel.
+            cap.draw(in: box, from: .zero, operation: .sourceOver, fraction: 1)
+            return
         }
+
+        // Hors template, l'atténuation doit venir de l'opacité du DESSIN, pas de
+        // la couleur qui le repeint. Teinter du noir opaque avec un blanc à 40 %
+        // donne un gris sombre *opaque* — invisible sur une barre sombre, ce qui
+        // faisait disparaître le dôme. On dessine donc à 40 %, puis `.sourceAtop`
+        // remplace la couleur en conservant cette opacité.
+        cap.draw(in: box, from: .zero, operation: .sourceOver, fraction: dimmed)
+        ink.setFill()
+        box.fill(using: .sourceAtop)
     }
 
     private static func drawOverlay(_ pair: (glyph: NSImage, mask: NSImage, scale: CGFloat)?,

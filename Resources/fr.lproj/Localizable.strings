@@ -50,6 +50,8 @@
 "sleep.tooltipActive" = "Veille empêchée";
 "error.sleepGuardFailed" = "Impossible d’empêcher la veille";
 "error.sleepGuardFailedDetail" = "Le système a refusé l’assertion d’alimentation.";
+"error.displayGuardFailed" = "Impossible de garder l’écran allumé";
+"error.displayGuardFailedDetail" = "Le système a refusé l’assertion d’alimentation.";
 
 /* Rangée d'icônes compacte et infobulles au survol */
 "menu.limitHint" = "Limiter la charge à %d %%";
@@ -58,6 +60,11 @@
 "icon.sleep.off" = "Empêcher le Mac de dormir";
 "icon.sleep.lid.on" = "Fonctionne aussi capot fermé.";
 "icon.sleep.lid.off" = "Capot fermé, le Mac dormira quand même — pour l'éviter : Tools/install-helper.sh";
+
+/* Écran allumé — assertion distincte de la veille système. */
+"icon.display.on" = "Écran maintenu allumé — cliquer pour le laisser s'éteindre";
+"icon.display.off" = "Garder l'écran allumé (empêcher la veille seule le laisse s'éteindre)";
+"display.elsewhere" = "Également maintenu allumé par une autre app";
 "icon.lowpower" = "Mode économie : %@ — se change dans les Réglages Batterie (clic)";
 "icon.login" = "Lancement à l'ouverture de session : %@ — cliquer pour basculer";
 "icon.quit" = "Quitter (⌘Q)";

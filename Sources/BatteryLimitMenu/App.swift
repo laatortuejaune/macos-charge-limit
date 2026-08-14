@@ -89,6 +89,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// l'expliquer. Quitter proprement le repose donc à zéro.
     func applicationWillTerminate(_ notification: Notification) {
         SleepGuard.releaseAll()
+        // Celle-ci mourrait seule avec le processus ; la relâcher explicitement
+        // la fait disparaître de `pmset -g assertions` tout de suite plutôt qu'à
+        // la faveur du ramassage, ce qui rend le diagnostic honnête.
+        DisplayGuard.release()
     }
 
     // MARK: - Barre de menu
@@ -224,12 +228,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     // MARK: - Rangée d'icônes
 
-    /// Veille, mode économie, lancement à l'ouverture, réglages, quitter : cinq
-    /// icônes sur une rangée. L'état se lit à la teinte (accentuée = actif), le
-    /// détail à l'infobulle. Les glyphes sont choisis pour se passer de légende :
-    /// lune, feuille, app cochée, engrenage, croix.
+    /// Veille, écran allumé, mode économie, lancement à l'ouverture, réglages,
+    /// quitter : six icônes sur une rangée. L'état se lit à la teinte (accentuée
+    /// = actif), le détail à l'infobulle. Les glyphes sont choisis pour se passer
+    /// de légende : lune, soleil, feuille, app cochée, engrenage, croix.
+    ///
+    /// Lune et soleil se suivent parce qu'ils forment une paire : l'une empêche
+    /// la machine de dormir, l'autre empêche l'écran de s'éteindre, et ce sont
+    /// deux réglages distincts que macOS traite séparément.
     private func iconStrip() -> NSMenuItem {
         let sleepActive = SleepGuard.isActive
+        let displayActive = DisplayGuard.isActive
         let lowPower = BatteryTime.lowPowerMode()
         let loginOn = SMAppService.mainApp.status == .enabled
 
@@ -238,6 +247,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                        active: sleepActive,
                        tooltip: sleepTooltip(active: sleepActive),
                        action: #selector(toggleSleepGuard)),
+            iconButton(symbol: displayActive ? "sun.max.fill" : "sun.max",
+                       active: displayActive,
+                       tooltip: displayTooltip(active: displayActive),
+                       action: #selector(toggleDisplayGuard)),
             lowPower.map { on in
                 // Cliquable pour de vrai si la règle sudoers est là ; sinon on se
                 // rabat sur l'ouverture des Réglages, comme la couverture du capot.
@@ -312,6 +325,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return lines.joined(separator: "\n")
     }
 
+    /// L'infobulle dit ce que le bouton d'à côté ne fait PAS : empêcher la veille
+    /// laisse l'écran s'éteindre. Sans cette phrase, les deux lunes/soleils
+    /// passeraient pour un doublon.
+    private func displayTooltip(active: Bool) -> String {
+        var lines = [L(active ? "icon.display.on" : "icon.display.off")]
+        if DisplayGuard.heldElsewhere() == true { lines.append(L("display.elsewhere")) }
+        return lines.joined(separator: "\n")
+    }
+
     @objc private func quitClicked(_ sender: NSButton) {
         sender.enclosingMenuItem?.menu?.cancelTracking()
         NSApp.terminate(nil)
@@ -324,6 +346,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             warn(L("error.sleepGuardFailed"), L("error.sleepGuardFailedDetail"))
         }
         // Le tooltip porte l'état de la veille : sans ça il resterait sur la
+        // valeur d'avant jusqu'au prochain changement d'alimentation.
+        refreshTitle()
+    }
+
+    @objc private func toggleDisplayGuard() {
+        statusItem.menu?.cancelTracking()
+        if !DisplayGuard.toggle() {
+            warn(L("error.displayGuardFailed"), L("error.displayGuardFailedDetail"))
+        }
+        // L'icône porte l'état : sans ce rafraîchissement elle resterait sur la
         // valeur d'avant jusqu'au prochain changement d'alimentation.
         refreshTitle()
     }

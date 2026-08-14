@@ -61,6 +61,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // cet observateur elle resterait figée jusqu'à la prochaine ouverture
         // du menu.
         BatteryTime.observePowerChanges { [weak self] in self?.refreshTitle() }
+
+        // `disablesleep` survit à l'app : s'il traîne d'un lancement qui s'est mal
+        // terminé, on le reprend en main plutôt que de l'ignorer. Sinon le menu
+        // afficherait une case décochée devant un Mac qui ne dort plus.
+        SleepGuard.adoptSystemState()
+    }
+
+    /// Dernier filet. Les assertions se relâchent seules à la mort du processus,
+    /// mais pas `disablesleep`, qui est un réglage système et survivrait même à un
+    /// redémarrage — un portable qui ne dort plus jamais, sans rien à l'écran pour
+    /// l'expliquer. Quitter proprement le repose donc à zéro.
+    func applicationWillTerminate(_ notification: Notification) {
+        SleepGuard.releaseAll()
     }
 
     // MARK: - Barre de menu
@@ -136,6 +149,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         menu.addItem(.separator())
         menu.addItem(sleepItem())
+        if let detail = sleepDetailItem() { menu.addItem(detail) }
         // Signalé seulement quand ça vient d'ailleurs : sinon la coche décochée
         // affirmerait « la veille n'est pas empêchée » à côté d'un Mac qui ne
         // dormira pas — un caffeinate oublié dans un terminal, une visio.
@@ -202,7 +216,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     /// La coche reflète ce que *cette* app tient, pas l'état global du système :
     /// c'est ce que le clic va basculer, donc c'est ce qu'elle doit annoncer. Le
-    /// reste est dit par la ligne `sleep.elsewhere`.
+    /// reste est dit par les lignes qui suivent.
     private func sleepItem() -> NSMenuItem {
         let item = NSMenuItem(title: L("sleep.prevent"),
                               action: #selector(toggleSleepGuard), keyEquivalent: "")
@@ -211,8 +225,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return item
     }
 
+    /// Ce que la coche ne peut pas dire à elle seule : jusqu'où va la couverture.
+    /// Une case cochée devant un Mac qui s'endort quand même dès qu'on rabat
+    /// l'écran serait un mensonge par omission, et c'est justement le cas par
+    /// défaut tant que la règle sudoers n'est pas posée.
+    private func sleepDetailItem() -> NSMenuItem? {
+        switch SleepGuard.coverage() {
+        case .off:      return nil
+        case .full:     return header(L("sleep.lidCovered"))
+        case .idleOnly: return header(L("sleep.lidUncovered"))
+        }
+    }
+
     @objc private func toggleSleepGuard() {
-        if !SleepGuard.toggle() {
+        if case .refused = SleepGuard.toggle() {
             warn(L("error.sleepGuardFailed"), L("error.sleepGuardFailedDetail"))
         }
         // Le tooltip porte l'état de la veille : sans ça il resterait sur la

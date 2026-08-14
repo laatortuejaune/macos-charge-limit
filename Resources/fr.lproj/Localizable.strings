@@ -52,6 +52,9 @@
 "error.sleepGuardFailedDetail" = "Le système a refusé l’assertion d’alimentation.";
 "error.displayGuardFailed" = "Impossible de garder l’écran allumé";
 "error.displayGuardFailedDetail" = "Le système a refusé l’assertion d’alimentation.";
+"error.inhibitFailed" = "Impossible de changer la charge";
+"error.inhibitFailedDetail" = "Refusé — la batterie est peut-être sous le plancher de %d %%.";
+"error.inhibitReleaseDetail" = "Le helper a refusé de rendre la charge. Redémarrer remet le SMC à plat.";
 
 /* Rangée d'icônes compacte et infobulles au survol */
 "menu.limitHint" = "Limiter la charge à %d %%";
@@ -65,6 +68,12 @@
 "icon.display.on" = "Écran maintenu allumé — cliquer pour le laisser s'éteindre";
 "icon.display.off" = "Garder l'écran allumé (empêcher la veille seule le laisse s'éteindre)";
 "display.elsewhere" = "Également maintenu allumé par une autre app";
+
+/* Suspension de charge — SMC, via le helper privilégié. */
+"icon.inhibit.on" = "Charge suspendue — cliquer pour l'autoriser à nouveau";
+"icon.inhibit.off" = "Suspendre la charge, quel que soit le niveau";
+"icon.inhibit.floor" = "Se relâche seule sous %d %% pour que la batterie ne se vide pas.";
+"icon.inhibit.helper" = "Demande le helper, à installer une fois : Tools/install-helper.sh";
 "icon.lowpower" = "Mode économie : %@ — se change dans les Réglages Batterie (clic)";
 "icon.login" = "Lancement à l'ouverture de session : %@ — cliquer pour basculer";
 "icon.quit" = "Quitter (⌘Q)";

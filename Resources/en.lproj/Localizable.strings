@@ -52,6 +52,9 @@
 "error.sleepGuardFailedDetail" = "The system refused the power assertion.";
 "error.displayGuardFailed" = "Couldn’t keep the screen on";
 "error.displayGuardFailedDetail" = "The system refused the power assertion.";
+"error.inhibitFailed" = "Couldn’t change charging";
+"error.inhibitFailedDetail" = "Refused — the battery may be below the %d %% floor.";
+"error.inhibitReleaseDetail" = "The helper refused to resume charging. Restarting clears the SMC.";
 
 /* Compact icon row and hover tooltips */
 "menu.limitHint" = "Limit charging to %d%%";
@@ -65,6 +68,12 @@
 "icon.display.on" = "The screen is being kept on — click to let it turn off again";
 "icon.display.off" = "Keep the screen on (preventing sleep alone still lets it turn off)";
 "display.elsewhere" = "Also kept on by another app";
+
+/* Suspension de charge — SMC, via le helper privilégié. */
+"icon.inhibit.on" = "Charging is suspended — click to allow it again";
+"icon.inhibit.off" = "Suspend charging, whatever the level";
+"icon.inhibit.floor" = "Releases on its own below %d %% so the battery cannot run flat.";
+"icon.inhibit.helper" = "Needs the one-time helper — to install it: Tools/install-helper.sh";
 "icon.lowpower" = "Low Power Mode: %@ — changed in Battery Settings (click)";
 "icon.login" = "Launch at Login: %@ — click to toggle";
 "icon.quit" = "Quit (⌘Q)";

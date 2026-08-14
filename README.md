@@ -432,6 +432,57 @@ Without the rule the app still works — it covers everything except the lid, an
 the menu says so on its own line rather than showing a ticked box next to a Mac
 that sleeps the moment you close it.
 
+### Suspending charging outright
+
+The charge limit stops at 80 %. Above that level, setting it to 80 does stop
+charging, and the app has always done that with no privilege at all. Below it,
+nothing — the system offers no lower step. Closing that gap took writing to the
+SMC, and three other routes were eliminated by measurement first.
+
+| Route | Result |
+| --- | --- |
+| `PowerUI` framework | 54 classes, 1 853 methods swept. Every verb goes the other way — `temporarilyEnableCharging`, `disableMCL`, `temporarilyDisableSmartCharging`. Nothing blocks. |
+| IOKit assertions | `ChargeInhibit` and `DisableInflow` are accepted without root and do **nothing**: charging held at 6.1 A through 90 s of assertion. Legacy types macOS registers for compatibility and ignores. |
+| SMC `CH0B` / `CH0C` / `BCLM` | The keys every tool of this kind cites **do not exist on this machine**. |
+
+`PowerUISmartChargeUtilities.isInflowInhibitSupported` returns **true**, so the
+hardware can do it; macOS simply keeps the control to itself.
+
+Enumerating all 2 494 SMC keys instead of guessing names turned up **`CHIE`**,
+writable, sitting at `00` during a charge. Measured on a live charge:
+
+```
+CHIE = 01   ->  5668 mA  ->  0 mA within 3 seconds
+CHIE = 00   ->  back to 5653 mA
+```
+
+The sense is inverted from what the name suggests: `01` inhibits, `00` allows.
+
+Three things had to be got right along the way, each of which fails silently
+rather than erroring. The parameter struct is 80 bytes with C alignment, so
+`keyInfo` sits at offset 28 — placing it at 20 makes every read return "key not
+found", including `#KEY`, which always exists and is therefore the integrity
+check. The key name travels as a 32-bit integer, so its four letters end up
+reversed in memory; writing them in reading order yields `result = 132`, the
+code for an unknown key. And the writable attribute bit is `0x40`, not `0x02` —
+that mistake made all sixteen writable keys look read-only.
+
+**Reads need no privilege; writes return `kIOReturnNotPrivileged`.** So the app
+reads the state for free and delegates the write to
+[`SMCChargeHelper`](Sources/SMCChargeHelper/main.swift), which accepts exactly two
+words and writes exactly one key.
+
+> The sudoers rule names a **path**. If the binary at that path were writable by
+> the user, the rule would stop being a narrow permission and become a privilege
+> escalation — replace the file, get root without a password. So the helper is
+> installed outside the repo as `root:wheel` `755`, never run from `.build/` or
+> from the app bundle.
+
+Because this setting **survives the app** — and unlike a sleep setting, its
+consequence is a battery that never refills — it gets three guards: the state is
+re-read at launch, reset on quit, and a **15 % floor** releases it automatically,
+enforced in the helper as well as the app so it holds even if the app misbehaves.
+
 ### One asymmetry worth knowing
 
 The two mechanisms do not fail the same way, and the difference is the whole
@@ -509,7 +560,11 @@ Sources/BatteryLimitMenu/
   BatteryGauge.swift    the drawn gauge, and the system glyphs it borrows
   SleepGuard.swift      the sleep-prevention toggle: IOKit power assertions
   DisplayGuard.swift    the separate assertion that keeps the screen lit
+  PowerAssertions.swift who else is holding the machine awake
   LowPower.swift        the Low Power Mode toggle, behind the sudoers rule
+  ChargeInhibit.swift   suspending charging at any level, via the SMC
+Sources/SMC/            the SMC protocol, shared by the app and the helper
+Sources/SMCChargeHelper/ the only part that runs as root: two words, one key
   App.swift             the menu bar UI
 Resources/
   Info.plist            LSUIElement — no Dock icon, no window
@@ -517,7 +572,7 @@ Resources/
   en.lproj, fr.lproj    English and French UI
 Tools/
   power-probe.swift     dumps the raw power keys; how the above was measured
-  install-helper.sh     the one-time sudoers rule for lid + low power
+  install-helper.sh     the one-time sudoers rule and the SMC helper
 build.sh                swift build + hand-assembled .app bundle
 ```
 

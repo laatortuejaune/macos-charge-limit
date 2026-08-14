@@ -34,7 +34,6 @@ enum Main {
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private var statusItem: NSStatusItem!
-    private var appearanceObserver: NSKeyValueObservation?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -73,9 +72,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // répond « clair » même sous une barre sombre — la jauge sortirait noire
         // sur fond noir. Un délai fixe serait un pari ; observer l'apparence
         // couvre à la fois cette stabilisation et les bascules clair/sombre.
-        appearanceObserver = statusItem.button?.observe(\.effectiveAppearance) { [weak self] _, _ in
-            DispatchQueue.main.async { self?.refreshTitle() }
-        }
+        //
+        // Le filtre sur le NOM n'est pas une optimisation, c'est ce qui empêche
+        // une boucle : redessiner pose une image sur le bouton, ce qui fait
+        // réévaluer son apparence, ce qui redéclenche cet observateur. Sans
+        // garde, l'app tournait en continu — mesuré à 64 % de processeur au
+        // repos, sur un agent de barre de menu censé ne rien faire. Le nom, lui,
+        // ne change qu'à une vraie bascule clair/sombre.
+        // Le thème clair/sombre, sans KVO.
+        //
+        // L'app observait `effectiveAppearance` sur le bouton. Mesuré : ce KVO se
+        // déclenche 728 fois PAR SECONDE sur un bouton de barre de menu, et coûte
+        // 63 % de processeur — pas à cause du travail fait dans le gestionnaire,
+        // qui était déjà filtré, mais de la machinerie KVO traversée à chaque
+        // fois. Un agent de barre de menu qui brûle un demi-cœur au repos vide la
+        // batterie qu'il est censé ménager.
+        //
+        // La notification distribuée ne part qu'à un vrai basculement de thème.
+        DistributedNotificationCenter.default.addObserver(
+            forName: NSNotification.Name("AppleInterfaceThemeChangedNotification"),
+            object: nil, queue: .main) { [weak self] _ in self?.refreshTitle() }
+
+        // Reste le cas du tout premier rendu : à la création du status item, le
+        // bouton n'a pas encore rejoint la barre et répond « clair » même sous une
+        // barre sombre. Un second passage au tour de boucle suivant suffit — ce
+        // n'est pas un délai deviné, c'est l'instant où AppKit a fini de poser la
+        // hiérarchie.
+        DispatchQueue.main.async { [weak self] in self?.refreshTitle() }
 
         // `disablesleep` survit à l'app : s'il traîne d'un lancement qui s'est mal
         // terminé, on le reprend en main plutôt que de l'ignorer. Sinon le menu

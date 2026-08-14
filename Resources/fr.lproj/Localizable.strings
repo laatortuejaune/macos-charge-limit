@@ -56,8 +56,8 @@
 "tooltip.limit" = "Limite de charge : %d %%";
 "icon.sleep.on" = "Veille empêchée — cliquer pour l'autoriser à nouveau";
 "icon.sleep.off" = "Empêcher le Mac de dormir";
-"icon.sleep.lid.on" = "Capot fermé : couvert.";
-"icon.sleep.lid.off" = "Capot fermé : NON couvert — poser la règle avec Tools/install-sleep-helper.sh";
+"icon.sleep.lid.on" = "Fonctionne aussi capot fermé.";
+"icon.sleep.lid.off" = "Capot fermé, le Mac dormira quand même — pour l'éviter : Tools/install-sleep-helper.sh";
 "icon.lowpower" = "Mode économie : %@ — se change dans les Réglages Batterie (clic)";
 "icon.login" = "Lancement à l'ouverture de session : %@ — cliquer pour basculer";
 "icon.quit" = "Quitter (⌘Q)";

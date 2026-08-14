@@ -362,6 +362,44 @@ The mode can also be switched from System Settings, or flip on its own at low
 charge, so the Darwin notification `com.apple.system.lowpowermode` drives the
 redraw. Without it the gauge stayed white with the mode plainly on.
 
+#### What Low Power Mode actually costs, measured
+
+A synthetic benchmark was run on an idle machine (A18 Pro, 2 performance + 4
+efficiency cores) — fixed thread counts pinned to a core type by QoS class, four
+rounds in mirrored OFF/ON/ON/OFF order so any drift cancels. It answered one of
+the two questions and failed the other, and both are worth recording.
+
+**It measured the performance cost.** Two independent passes per condition, on
+the two performance cores:
+
+| Mode | pass 1 | pass 2 | mean |
+| --- | --- | --- | --- |
+| Off | 413 625 | 429 689 | 421 657 |
+| On | 343 971 | 355 149 | 349 560 |
+
+**−17.1 %**, with an inter-pass spread of 3–4 % — the effect is five times the
+noise, so it is real. On the efficiency cores the spread (27 %) was larger than
+the effect (6.6 %), so nothing can be concluded there.
+
+**It failed to measure the battery saving**, and no amount of averaging fixes it,
+because all three power signals reachable without root are unusable at this time
+scale:
+
+| Signal | Failure |
+| --- | --- |
+| `PowerTelemetryData` accumulator | freezes under CPU load — 9 of 10 samples identical |
+| `TrueRemainingCapacity` delta | steps too coarse: `0 mA` over 170-second phases |
+| `Amperage` / `InstantAmperage` | stale — one distinct value in 40 s, and *lower* under load than at idle |
+
+The last one is the clearest: the controller reported 580 mA idle and 133 mA
+while both performance cores were saturated. A battery gauge is not an instrument
+at minute resolution. `powermetrics` would answer it, but it needs root, so the
+question stays open rather than being answered with a number that looks precise
+and is not.
+
+This is also, incidentally, the justification for how `BatteryTime` smooths over
+long windows. That was not excess caution.
+
 The script validates the rule with `visudo -c` **before** installing it. That step
 is not optional: a typo in a `/etc/sudoers.d` file breaks `sudo` outright,
 including the `sudo` you would need to repair it.

@@ -265,16 +265,58 @@ They are held or dropped as a pair. A partial state — idle sleep blocked but
 system sleep not — is real, and no checkmark can represent it honestly, so a
 refusal on either one rolls the other back and reports the failure.
 
-**It does not cover a closed lid.** Closing the display triggers clamshell sleep,
-which overrides held assertions; the only known lever is
-`sudo pmset -a disablesleep 1`, which requires root. That puts it out of reach
-by construction, and the stop is deliberate rather than an oversight: reaching it
-would mean shipping a privileged helper, which costs more than the feature is
-worth in an app whose entire point is that it needs no privilege.
+**Assertions do not cover a closed lid.** Closing the display triggers clamshell
+sleep, which overrides them; the only lever is `pmset -a disablesleep`, and it
+requires root.
 
-> Unlike the rest of this file, that paragraph is **not** measured on the
+> Unlike the rest of this file, that sentence is **not** measured on the
 > machine — it is the documented behaviour, not an observation. Treat it as
 > unverified until someone runs the check.
+
+So the lid is opt-in, and off by default. **The app itself still asks for no
+privilege**: it ships no helper tool, no daemon, and nothing setuid. What it
+relies on instead is a sudoers rule you install once, by hand:
+
+```bash
+Tools/install-sleep-helper.sh            # one sudo, once
+Tools/install-sleep-helper.sh uninstall  # and back out
+```
+
+What that grants is deliberately tiny — one account, two exact commands with
+their arguments spelled out, so the right cannot be used to run `pmset` for
+anything else:
+
+```
+you ALL=(root) NOPASSWD: /usr/bin/pmset -a disablesleep 1, /usr/bin/pmset -a disablesleep 0
+```
+
+The script validates the rule with `visudo -c` **before** installing it. That step
+is not optional: a typo in a `/etc/sudoers.d` file breaks `sudo` outright,
+including the `sudo` you would need to repair it.
+
+Without the rule the app still works — it covers everything except the lid, and
+the menu says so on its own line rather than showing a ticked box next to a Mac
+that sleeps the moment you close it.
+
+### One asymmetry worth knowing
+
+The two mechanisms do not fail the same way, and the difference is the whole
+reason the code has the shape it does.
+
+An assertion dies with the process holding it. `disablesleep` is a **system
+setting**: it outlives the app, and it survives a reboot. Left behind, it gives a
+laptop that never sleeps again with nothing on screen to explain why — one that
+cooks itself in a closed bag. Two guards, therefore:
+
+- **On quit**, `applicationWillTerminate` clears it. The lid setting goes first,
+  since it is the only one of the two that would otherwise persist.
+- **On launch**, the app reads the real setting and *adopts* it if it is already
+  on — from a previous run that crashed, or from a terminal. Ignoring it would
+  mean showing an unticked box in front of a Mac that will not sleep, from the
+  one place that could turn it back off.
+
+That is also why the menu reads `pmset -g` for the true value rather than
+trusting what it thinks it did.
 
 The assertions carry a name, so the toggle is auditable from a terminal without
 having to trust the checkmark:
@@ -291,9 +333,12 @@ this"* apart from *"something else is"* — a `caffeinate` forgotten in a termin
 a video call. Without it, an unchecked box would be claiming the Mac is free to
 sleep while it plainly isn't.
 
-Assertions die with the process that holds them, so quitting the app releases
-them — no Mac left awake by something that is no longer running. The flip side is
-that the state cannot carry across launches, so the toggle starts off every time.
+And to check the lid half, which is a setting rather than an assertion:
+
+```
+$ pmset -g | grep SleepDisabled
+ SleepDisabled          1
+```
 
 ### About the Shortcuts route
 
@@ -336,6 +381,7 @@ Resources/
   en.lproj, fr.lproj    English and French UI
 Tools/
   power-probe.swift     dumps the raw power keys; how the above was measured
+  install-sleep-helper.sh  the one-time sudoers rule for closed-lid coverage
 build.sh                swift build + hand-assembled .app bundle
 ```
 

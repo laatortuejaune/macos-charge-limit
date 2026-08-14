@@ -40,6 +40,7 @@ enum BatteryTime {
         let level = integer(snapshot, "CurrentCapacity") ?? 0
 
         guard flag(snapshot, "ExternalConnected") else {
+            negativeCurrentSince = nil
             guard let remaining = smoothedMinutesRemaining(snapshot)
                     ?? duration(snapshot, "TimeRemaining")
                     ?? duration(snapshot, "AvgTimeToEmpty")
@@ -50,6 +51,7 @@ enum BatteryTime {
         if flag(snapshot, "FullyCharged") { return L("battery.charged") }
 
         guard flag(snapshot, "IsCharging") else {
+            negativeCurrentSince = nil
             // Branché sans charger : soit la limite est atteinte, soit la charge
             // est suspendue (chaleur, charge optimisée…). Pas de compte à rebours.
             if let limit, level >= limit { return L("battery.limitReached", limit) }
@@ -66,17 +68,33 @@ enum BatteryTime {
 
         guard level < limit else { return L("battery.limitReached", limit) }
 
-        // Branché, annoncé « en charge », mais courant négatif : l'adaptateur ne
-        // couvre pas la consommation et la batterie se vide quand même. Vu en
-        // vrai avec un chargeur tombé à 8 W parce qu'un autre appareil partageait
-        // le port. Annoncer « calcul en cours » laisserait croire à une attente.
+        // Branché, annoncé « en charge », mais courant négatif ou nul. Deux cas
+        // très différents se ressemblent ici :
+        //  - l'adaptateur ne couvre pas la consommation et la batterie se vide
+        //    (vu en vrai : chargeur tombé à 8 W, un autre appareil sur le port) ;
+        //  - on vient de brancher, et `Amperage` — filtré, rafraîchi à la minute —
+        //    traîne encore sous zéro pendant la montée en régime (mesuré sur une
+        //    charge réelle : ~1 min entre le branchement et le plateau).
+        // Accuser l'adaptateur pendant la montée serait faux et alarmant, donc le
+        // verdict n'est rendu qu'après un délai de grâce.
         if let current = amperage(snapshot), current <= 0 {
-            return L("battery.adapterTooWeak")
+            let since = negativeCurrentSince ?? Date()
+            negativeCurrentSince = since
+            return Date().timeIntervalSince(since) > rampGrace
+                ? L("battery.adapterTooWeak")
+                : L("battery.computing")
         }
+        negativeCurrentSince = nil
         guard let toLimit = minutesToLimit(snapshot, level: level, limit: limit)
         else { return L("battery.computing") }
         return L("battery.untilLimit", format(toLimit), limit)
     }
+
+    /// Premier instant où un courant non positif a été vu pendant une charge.
+    /// Non privé pour que le banc de cas puisse simuler un délai déjà écoulé.
+    static var negativeCurrentSince: Date?
+    /// `Amperage` met ~1 min à refléter la montée en régime après branchement.
+    private static let rampGrace: TimeInterval = 90
 
     /// Le rappel du run loop est une fonction C : il ne capture rien, d'où ce
     /// stockage à part, ainsi que celui de la source qu'il faut garder en vie.

@@ -48,3 +48,10 @@
 "panel.off" = "Off";
 "panel.settings" = "Battery Settings…";
 "battery.adapterTooWeak" = "Adapter can’t keep up";
+
+/* Sleep prevention. Holds IOKit power assertions — see SleepGuard.swift. */
+"sleep.prevent" = "Prevent Sleep";
+"sleep.elsewhere" = "Also kept awake by another app";
+"sleep.tooltipActive" = "Sleep prevented";
+"error.sleepGuardFailed" = "Couldn’t prevent sleep";
+"error.sleepGuardFailedDetail" = "The system refused the power assertion.";

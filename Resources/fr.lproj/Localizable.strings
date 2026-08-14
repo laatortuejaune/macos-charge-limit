@@ -48,3 +48,10 @@
 "panel.off" = "désactivé";
 "panel.settings" = "Réglages Batterie…";
 "battery.adapterTooWeak" = "L’adaptateur ne suit pas";
+
+/* Empêchement de la veille. Assertions d'alimentation IOKit — cf. SleepGuard.swift. */
+"sleep.prevent" = "Empêcher la veille";
+"sleep.elsewhere" = "Également maintenu éveillé par une autre app";
+"sleep.tooltipActive" = "Veille empêchée";
+"error.sleepGuardFailed" = "Impossible d’empêcher la veille";
+"error.sleepGuardFailedDetail" = "Le système a refusé l’assertion d’alimentation.";

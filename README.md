@@ -189,12 +189,21 @@ the region we care about. Measured over a real charge, 53 → 64 % ran at
 1.4 min/point against the 2.6 min/point that `AvgTimeToFull` implied — scaling it
 would have promised 58 minutes for a stretch that took about 37.
 
-The app extrapolates from the charge current instead, which holds while the
-battery is still in constant-current charging — precisely the region below the
-lowest available limit. On the same charge that method predicted 35 minutes
-against roughly 37 actual. It is still an estimate, and it is shown as one:
-rounded to 5 minutes and prefixed with `~`. At a limit of 100 % no computation
-happens at all, and Apple's own untouched figure is shown without the tilde.
+The app extrapolates from the charge current instead. Calibrated against a full
+20 → 80 % charge (58 minutes, 237 samples): **median error 3 minutes, mean bias
+−0.8**. It is still an estimate, and it is shown as one: rounded to 5 minutes and
+prefixed with `~`. At a limit of 100 % no computation happens at all, and Apple's
+own untouched figure is shown without the tilde.
+
+The same calibration corrected two assumptions. Constant-current charging does
+not extend all the way to 80 % — on this machine the current tapers from about
+69 % (6.35 A down to 4.5 A), which costs the mid-charge prediction a few minutes
+of optimism. And the first minute after plugging in is a ramp: `Amperage` is
+filtered and refreshed about once a minute, so right after plug-in it can still
+read negative. The app used to conclude "adapter can't keep up" during that
+window, which is exactly wrong at exactly the moment the user looks; a negative
+current now has to persist for 90 seconds before that verdict is shown, and the
+window reads "Estimating…" instead.
 
 ### Standing in for the system battery menu
 

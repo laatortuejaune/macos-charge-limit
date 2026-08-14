@@ -315,6 +315,19 @@ yes for any admin who *could* run it with a password, which is a false positive.
 The check reads the NOPASSWD listing itself and looks for `lowpowermode` there, so
 a missing rule reads as missing rather than as "allowed, then fails on click".
 
+**The gauge turns yellow while Low Power Mode is on**, as macOS and iOS do. It
+uses `NSColor.systemYellow` — the semantic colour, not a frozen hex, so it tracks
+the appearance and accessibility settings (it resolves to #FFCC00 in light,
+#FFD600 in dark). That costs the image its *template* status: a template image
+carries no colour of its own, the system tints it. So the rest of the glyph has
+to be tinted here, against the **menu bar's** appearance rather than the app's.
+
+Which is where the trap is. At the moment the status item is created the button
+has not joined the menu bar yet and reports the light appearance even under a
+dark bar, so the first render came out black on black. A fixed delay would be a
+guess; the code observes `effectiveAppearance` on the button instead, which
+covers both that settling and later light/dark switches.
+
 The script validates the rule with `visudo -c` **before** installing it. That step
 is not optional: a typo in a `/etc/sudoers.d` file breaks `sudo` outright,
 including the `sudo` you would need to repair it.

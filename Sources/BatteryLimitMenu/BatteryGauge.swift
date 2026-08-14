@@ -34,7 +34,15 @@ enum BatteryGauge {
     /// `plugged` sans `charging` n'est pas un détail : c'est l'état normal une
     /// fois la limite atteinte, et le système y affiche une prise plutôt qu'un
     /// éclair. Sans ça, l'icône ne montre plus rien alors que le Mac est branché.
-    static func image(level: Int, charging: Bool, plugged: Bool = false) -> NSImage {
+    ///
+    /// `lowPower` teinte la jauge en jaune, comme macOS et iOS. Ça force à sortir
+    /// du mode *template* : une image template n'a pas de couleur propre, le
+    /// système la teinte lui-même. Il faut donc résoudre soi-même la teinte du
+    /// reste — d'où `appearance`, celle de la barre de menu et non celle de
+    /// l'app, les deux pouvant différer.
+    static func image(level: Int, charging: Bool, plugged: Bool = false,
+                      lowPower: Bool = false,
+                      appearance: NSAppearance? = nil) -> NSImage {
         let size = NSSize(width: bodySize.width + capGap + capVisible.width + 1,
                           height: canvasHeight)
         let image = NSImage(size: size)
@@ -43,13 +51,18 @@ enum BatteryGauge {
         image.lockFocus()
         defer { image.unlockFocus(); }
 
+        // En mode template on dessine en noir : le système remplace la teinte.
+        // Sinon il faut la résoudre soi-même, contre l'apparence de la barre.
+        let ink = lowPower ? resolvedInk(appearance) : .black
+        let fill = lowPower ? NSColor.systemYellow : .black
+
         let body = NSRect(x: 0, y: originY, width: bodySize.width, height: bodySize.height)
         let shape = NSBezierPath(roundedRect: body, xRadius: cornerRadius, yRadius: cornerRadius)
 
-        NSColor.black.withAlphaComponent(dimmed).setFill()
+        ink.withAlphaComponent(dimmed).setFill()
         shape.fill()
 
-        drawCap(after: body)
+        drawCap(after: body, ink: ink)
 
         // Portion chargée : la même forme, rognée à la largeur du niveau, pour
         // que les coins arrondis restent ceux du corps.
@@ -57,20 +70,29 @@ enum BatteryGauge {
         if fraction > 0 {
             NSGraphicsContext.saveGraphicsState()
             shape.addClip()
-            NSColor.black.setFill()
+            fill.setFill()
             NSRect(x: body.minX, y: body.minY,
                    width: body.width * fraction, height: body.height).fill()
             NSGraphicsContext.restoreGraphicsState()
         }
 
         if charging {
-            drawOverlay(systemBolt, in: body)
+            drawOverlay(systemBolt, in: body, ink: ink)
         } else if plugged {
-            drawOverlay(systemPlug, in: body)
+            drawOverlay(systemPlug, in: body, ink: ink)
         }
 
-        image.isTemplate = true
+        image.isTemplate = !lowPower
         return image
+    }
+
+    /// Teinte du tracé quand l'image n'est plus template. La barre de menu peut
+    /// être sombre alors que l'app est claire, d'où l'apparence passée en
+    /// paramètre plutôt que celle de l'application.
+    private static func resolvedInk(_ appearance: NSAppearance?) -> NSColor {
+        let source = appearance ?? NSApp.effectiveAppearance
+        let dark = source.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        return dark ? .white : .black
     }
 
     // Les glyphes viennent du bundle de Contrôle : ce sont les images d'Apple
@@ -132,7 +154,7 @@ enum BatteryGauge {
 
     /// Le téton est un dôme, plat côté corps et bombé vers l'extérieur, pas un
     /// bâtonnet uniforme. Autant prendre celui du système que le retracer.
-    private static func drawCap(after body: NSRect) {
+    private static func drawCap(after body: NSRect, ink: NSColor) {
         guard let cap = systemCap else {
             // Repli grossier : un demi-disque approché par un rectangle arrondi.
             let height = capVisible.height
@@ -143,13 +165,21 @@ enum BatteryGauge {
         }
         // Le dôme est collé au bord gauche de sa boîte — la demi-unité de marge
         // est à droite — donc le bord de la boîte donne directement l'écart voulu.
-        cap.draw(in: NSRect(x: body.maxX + capGap, y: body.midY - cap.size.height / 2,
-                            width: cap.size.width, height: cap.size.height),
-                 from: .zero, operation: .sourceOver, fraction: 1)
+        let box = NSRect(x: body.maxX + capGap, y: body.midY - cap.size.height / 2,
+                         width: cap.size.width, height: cap.size.height)
+        cap.draw(in: box, from: .zero, operation: .sourceOver, fraction: 1)
+
+        // Hors mode template, le dôme resterait noir : le système ne le reteinte
+        // plus. `.sourceAtop` ne peint que là où il est déjà opaque, et la boîte
+        // est hors du corps, donc rien d'autre n'est touché.
+        if ink != .black {
+            ink.withAlphaComponent(dimmed).setFill()
+            box.fill(using: .sourceAtop)
+        }
     }
 
     private static func drawOverlay(_ pair: (glyph: NSImage, mask: NSImage, scale: CGFloat)?,
-                                    in body: NSRect) {
+                                    in body: NSRect, ink: NSColor) {
         if let pair {
             // Le système agrandit ces glyphes : c'est ce qui les fait dépasser du
             // corps tout en épaississant leur liseré d'autant.
@@ -159,6 +189,12 @@ enum BatteryGauge {
                              width: size.width, height: size.height)
             pair.mask.draw(in: box, from: .zero, operation: .destinationOut, fraction: 1)
             pair.glyph.draw(in: box, from: .zero, operation: .sourceOver, fraction: 1)
+            // Hors mode template, le glyphe reste noir : on le repeint dans la
+            // teinte résolue, `.sourceAtop` ne touchant que ce qui est déjà opaque.
+            if ink != .black {
+                ink.setFill()
+                box.fill(using: .sourceAtop)
+            }
             return
         }
 

@@ -222,10 +222,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                        tooltip: sleepTooltip(active: sleepActive),
                        action: #selector(toggleSleepGuard)),
             lowPower.map { on in
-                iconButton(symbol: on ? "leaf.fill" : "leaf",
-                           active: on,
-                           tooltip: L("icon.lowpower", L(on ? "panel.on" : "panel.off")),
-                           action: #selector(openBatterySettings))
+                // Cliquable pour de vrai si la règle sudoers est là ; sinon on se
+                // rabat sur l'ouverture des Réglages, comme la couverture du capot.
+                let canToggle = LowPower.canToggle()
+                let state = L(on ? "panel.on" : "panel.off")
+                return iconButton(
+                    symbol: on ? "leaf.fill" : "leaf",
+                    active: on,
+                    tooltip: L(canToggle ? "icon.lowpower.toggle" : "icon.lowpower", state),
+                    action: canToggle ? #selector(toggleLowPower) : #selector(openBatterySettings))
             } ?? nil,
             iconButton(symbol: "app.badge.checkmark",
                        active: loginOn,
@@ -304,6 +309,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // Le tooltip porte l'état de la veille : sans ça il resterait sur la
         // valeur d'avant jusqu'au prochain changement d'alimentation.
         refreshTitle()
+    }
+
+    @objc private func toggleLowPower() {
+        statusItem.menu?.cancelTracking()
+        // On lit l'état courant plutôt que de mémoriser un booléen : il peut avoir
+        // changé depuis les Réglages entre l'ouverture du menu et le clic.
+        let target = !(BatteryTime.lowPowerMode() ?? false)
+        if !LowPower.set(target) {
+            warn(L("error.lowPowerFailed"), L("error.lowPowerFailedDetail"))
+        }
     }
 
     // MARK: - Lancement à l'ouverture de session

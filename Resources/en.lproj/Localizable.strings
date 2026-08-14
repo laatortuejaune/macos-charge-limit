@@ -57,7 +57,10 @@
 "icon.sleep.on" = "Sleep is being prevented — click to allow it again";
 "icon.sleep.off" = "Prevent the Mac from sleeping";
 "icon.sleep.lid.on" = "Also works with the lid closed.";
-"icon.sleep.lid.off" = "With the lid closed the Mac will still sleep — to change that: Tools/install-sleep-helper.sh";
+"icon.sleep.lid.off" = "With the lid closed the Mac will still sleep — to change that: Tools/install-helper.sh";
 "icon.lowpower" = "Low Power Mode: %@ — changed in Battery Settings (click)";
 "icon.login" = "Launch at Login: %@ — click to toggle";
 "icon.quit" = "Quit (⌘Q)";
+"icon.lowpower.toggle" = "Low Power Mode: %@ — click to toggle";
+"error.lowPowerFailed" = "Couldn't change Low Power Mode";
+"error.lowPowerFailedDetail" = "The privileged rule may have been removed. Re-run Tools/install-helper.sh.";

@@ -4,13 +4,14 @@ A small macOS menu bar app to read and change the built-in **battery charge
 limit** — 80 / 85 / 90 / 95 / 100 % — without opening System Settings.
 
 <p align="center">
-  <img src="docs/menu.png" width="291" alt="The compact menu: status line, charge-limit segments, and an icon row for sleep, low power, login, settings and quit">
+  <img src="docs/menu.png" width="291" alt="The compact menu: status line, charge-limit segments, and an icon row for sleep, screen, low power, login, settings and quit">
 </p>
 
 It replaces the macOS battery menu — same drawn gauge in the menu bar — so you
 can turn Apple's own battery icon off and stop having two of them side by side.
 The menu itself is three rows: a status line, the charge-limit segments, and a
-row of icons (prevent sleep, Low Power Mode, launch at login, settings, quit).
+row of icons (prevent sleep, keep the screen on, Low Power Mode, launch at
+login, settings, quit).
 Everything else — power source, sleep coverage, who else is keeping the Mac
 awake — lives in tooltips, on hover.
 
@@ -277,6 +278,26 @@ They are held or dropped as a pair. A partial state — idle sleep blocked but
 system sleep not — is real, and no checkmark can represent it honestly, so a
 refusal on either one rolls the other back and reports the failure.
 
+**Neither of them keeps the screen on.** `PreventUserIdleSystemSleep` blocks the
+idle timer but explicitly allows the display to switch off — that is the point of
+it, a machine that keeps working with a dark screen. The symptom is a Mac that
+never sleeps and whose screen goes black anyway. Keeping the display lit is a
+third assertion, `PreventUserIdleDisplaySleep`, and it has to be asked for
+separately:
+
+```
+$ pmset -g assertions
+PreventUserIdleDisplaySleep    1
+pid 15337: PreventUserIdleDisplaySleep named: "BatteryLimitMenu: display sleep
+                                                prevented from the menu bar"
+```
+
+It gets its own button (the sun, next to the moon) because the two are not
+interchangeable. The implication runs one way only: a lit screen is not a
+sleeping machine, so keeping the display on prevents idle sleep as a side
+effect — while preventing sleep does nothing for the display. Same family as the
+rest, `IOPMAssertionCreateWithName`, no privilege, and it dies with the process.
+
 **Assertions do not cover a closed lid.** Closing the display triggers clamshell
 sleep, which overrides them; the only lever is `pmset -a disablesleep`, and it
 requires root.
@@ -425,6 +446,8 @@ Sources/BatteryLimitMenu/
   BatteryTime.swift     time remaining, and the estimate to the limit
   BatteryGauge.swift    the drawn gauge, and the system glyphs it borrows
   SleepGuard.swift      the sleep-prevention toggle: IOKit power assertions
+  DisplayGuard.swift    the separate assertion that keeps the screen lit
+  LowPower.swift        the Low Power Mode toggle, behind the sudoers rule
   App.swift             the menu bar UI
 Resources/
   Info.plist            LSUIElement — no Dock icon, no window
@@ -432,7 +455,7 @@ Resources/
   en.lproj, fr.lproj    English and French UI
 Tools/
   power-probe.swift     dumps the raw power keys; how the above was measured
-  install-helper.sh        the one-time sudoers rule for lid + low power
+  install-helper.sh     the one-time sudoers rule for lid + low power
 build.sh                swift build + hand-assembled .app bundle
 ```
 

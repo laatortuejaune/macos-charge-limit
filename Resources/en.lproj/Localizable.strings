@@ -50,6 +50,8 @@
 "sleep.tooltipActive" = "Sleep prevented";
 "error.sleepGuardFailed" = "Couldn’t prevent sleep";
 "error.sleepGuardFailedDetail" = "The system refused the power assertion.";
+"error.displayGuardFailed" = "Couldn’t keep the screen on";
+"error.displayGuardFailedDetail" = "The system refused the power assertion.";
 
 /* Compact icon row and hover tooltips */
 "menu.limitHint" = "Limit charging to %d%%";
@@ -58,6 +60,11 @@
 "icon.sleep.off" = "Prevent the Mac from sleeping";
 "icon.sleep.lid.on" = "Also works with the lid closed.";
 "icon.sleep.lid.off" = "With the lid closed the Mac will still sleep — to change that: Tools/install-helper.sh";
+
+/* Écran allumé — assertion distincte de la veille système. */
+"icon.display.on" = "The screen is being kept on — click to let it turn off again";
+"icon.display.off" = "Keep the screen on (preventing sleep alone still lets it turn off)";
+"display.elsewhere" = "Also kept on by another app";
 "icon.lowpower" = "Low Power Mode: %@ — changed in Battery Settings (click)";
 "icon.login" = "Launch at Login: %@ — click to toggle";
 "icon.quit" = "Quit (⌘Q)";

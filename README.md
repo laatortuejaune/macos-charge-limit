@@ -4,7 +4,7 @@ A small macOS menu bar app to read and change the built-in **battery charge
 limit** — 80 / 85 / 90 / 95 / 100 % — without opening System Settings.
 
 <p align="center">
-  <img src="docs/menu.png" width="291" alt="The compact menu: status line, charge-limit segments, and an icon row for sleep, screen, low power, login, settings and quit">
+  <img src="docs/menu.png" width="306" alt="The compact menu: status line, charge-limit segments, and an icon row for sleep, screen, low power, login, settings and quit">
 </p>
 
 It replaces the macOS battery menu — same drawn gauge in the menu bar — so you

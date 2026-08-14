@@ -116,6 +116,21 @@ enum BatteryTime {
         powerSource = source
     }
 
+    private static var lowPowerHandler: (() -> Void)?
+
+    /// Observe les changements de mode économie, d'où qu'ils viennent : le menu,
+    /// les Réglages Système, ou une bascule automatique sur batterie faible.
+    /// Sans ça la jauge resterait blanche alors que le mode est actif — vérifié.
+    static func observeLowPowerChanges(_ handler: @escaping () -> Void) {
+        lowPowerHandler = handler
+        CFNotificationCenterAddObserver(
+            CFNotificationCenterGetDarwinNotifyCenter(), nil,
+            { _, _, _, _, _ in
+                DispatchQueue.main.async { BatteryTime.lowPowerHandler?() }
+            },
+            "com.apple.system.lowpowermode" as CFString, nil, .deliverImmediately)
+    }
+
     /// Mode économie d'énergie, `nil` si illisible.
     ///
     /// Lecture seule, et ce n'est pas un oubli : `setPowerMode:fromSource:` ne

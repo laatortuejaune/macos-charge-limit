@@ -322,11 +322,21 @@ the appearance and accessibility settings (it resolves to #FFCC00 in light,
 carries no colour of its own, the system tints it. So the rest of the glyph has
 to be tinted here, against the **menu bar's** appearance rather than the app's.
 
-Which is where the trap is. At the moment the status item is created the button
+Which is where the traps are. At the moment the status item is created the button
 has not joined the menu bar yet and reports the light appearance even under a
 dark bar, so the first render came out black on black. A fixed delay would be a
 guess; the code observes `effectiveAppearance` on the button instead, which
 covers both that settling and later light/dark switches.
+
+The cap is the second one. Dimming has to come from the *drawing's* opacity, not
+from the colour that repaints it: tinting an opaque black dome with 40 %-alpha
+white yields an opaque dark grey, which vanishes against a dark menu bar. It is
+drawn at 40 % and then recoloured with an opaque tint, so only the fill differs
+between the two states — empty body and cap stay pixel-identical.
+
+The mode can also be switched from System Settings, or flip on its own at low
+charge, so the Darwin notification `com.apple.system.lowpowermode` drives the
+redraw. Without it the gauge stayed white with the mode plainly on.
 
 The script validates the rule with `visudo -c` **before** installing it. That step
 is not optional: a typo in a `/etc/sudoers.d` file breaks `sudo` outright,

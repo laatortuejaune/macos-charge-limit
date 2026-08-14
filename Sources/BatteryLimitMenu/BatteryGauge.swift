@@ -168,18 +168,16 @@ enum BatteryGauge {
         let box = NSRect(x: body.maxX + capGap, y: body.midY - cap.size.height / 2,
                          width: cap.size.width, height: cap.size.height)
 
-        guard ink != .black else {
-            // Mode template : le système teinte, on dessine tel quel.
-            cap.draw(in: box, from: .zero, operation: .sourceOver, fraction: 1)
-            return
-        }
+        // Le dôme se dessine à pleine opacité — c'est son propre dégradé qui lui
+        // donne son relief, il n'est pas atténué comme le corps vide.
+        cap.draw(in: box, from: .zero, operation: .sourceOver, fraction: 1)
 
-        // Hors template, l'atténuation doit venir de l'opacité du DESSIN, pas de
-        // la couleur qui le repeint. Teinter du noir opaque avec un blanc à 40 %
-        // donne un gris sombre *opaque* — invisible sur une barre sombre, ce qui
-        // faisait disparaître le dôme. On dessine donc à 40 %, puis `.sourceAtop`
-        // remplace la couleur en conservant cette opacité.
-        cap.draw(in: box, from: .zero, operation: .sourceOver, fraction: dimmed)
+        // Hors mode template, le système ne le reteinte plus : il resterait noir.
+        // La teinte doit être OPAQUE — la passer à 40 % composerait un gris sombre
+        // sur le noir du dessin au lieu de le remplacer, ce qui assombrit le dôme
+        // au lieu de le colorer. `.sourceAtop` ne touche que ce qui est opaque, et
+        // la boîte est hors du corps, donc rien d'autre n'est affecté.
+        guard ink != .black else { return }
         ink.setFill()
         box.fill(using: .sourceAtop)
     }

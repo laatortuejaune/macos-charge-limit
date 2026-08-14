@@ -79,11 +79,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         button.image = BatteryGauge.image(level: gauge.level, charging: gauge.charging,
                                           plugged: gauge.plugged)
 
+        var tip: String
         if let limit = ChargeLimit.current() {
-            button.toolTip = L("status.tooltip.full", gauge.level, limit)
+            tip = L("status.tooltip.full", gauge.level, limit)
         } else {
-            button.toolTip = L("status.tooltip", gauge.level)
+            tip = L("status.tooltip", gauge.level)
         }
+        // Sur une deuxième ligne : c'est le seul endroit où l'état de la veille se
+        // lit sans ouvrir le menu, la barre restant volontairement limitée à la
+        // jauge pour ne pas s'allonger.
+        if SleepGuard.isActive { tip += "\n" + L("sleep.tooltipActive") }
+        button.toolTip = tip
     }
 
     // MARK: - Menu
@@ -126,6 +132,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                                   action: #selector(openBatterySettings), keyEquivalent: "")
             item.target = self
             menu.addItem(item)
+        }
+
+        menu.addItem(.separator())
+        menu.addItem(sleepItem())
+        // Signalé seulement quand ça vient d'ailleurs : sinon la coche décochée
+        // affirmerait « la veille n'est pas empêchée » à côté d'un Mac qui ne
+        // dormira pas — un caffeinate oublié dans un terminal, une visio.
+        if SleepGuard.heldElsewhere() == true {
+            menu.addItem(header(L("sleep.elsewhere")))
         }
 
         menu.addItem(.separator())
@@ -180,6 +195,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         // Le démon poste la notification, mais on rafraîchit tout de suite pour
         // que l'affichage ne dépende pas de son délai.
+        refreshTitle()
+    }
+
+    // MARK: - Veille
+
+    /// La coche reflète ce que *cette* app tient, pas l'état global du système :
+    /// c'est ce que le clic va basculer, donc c'est ce qu'elle doit annoncer. Le
+    /// reste est dit par la ligne `sleep.elsewhere`.
+    private func sleepItem() -> NSMenuItem {
+        let item = NSMenuItem(title: L("sleep.prevent"),
+                              action: #selector(toggleSleepGuard), keyEquivalent: "")
+        item.target = self
+        item.state = SleepGuard.isActive ? .on : .off
+        return item
+    }
+
+    @objc private func toggleSleepGuard() {
+        if !SleepGuard.toggle() {
+            warn(L("error.sleepGuardFailed"), L("error.sleepGuardFailedDetail"))
+        }
+        // Le tooltip porte l'état de la veille : sans ça il resterait sur la
+        // valeur d'avant jusqu'au prochain changement d'alimentation.
         refreshTitle()
     }
 

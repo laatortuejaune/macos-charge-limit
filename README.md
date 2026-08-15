@@ -538,7 +538,21 @@ consequence is a battery that never refills — it gets three guards: the state 
 re-read at launch, reset on quit, and a **15 % floor** releases it automatically,
 enforced in the helper as well as the app so it holds even if the app misbehaves.
 
-### One asymmetry worth knowing
+### Recording what the machine is doing
+
+The record toggle in the icon row samples the machine every 10 seconds into a
+CSV on the Desktop — one file per recording, named after its start time, written
+line by line so an interruption loses nothing. Each row carries the power state
+(plugged, charging, adapter watts — the adapter column is what disambiguates the
+suspended-charge state described above), the battery (level,
+`TrueRemainingCapacity`, voltage, signed current, instant current, battery
+power), CPU as a 0–100 all-cores average from processor-tick deltas, GPU
+utilization from the accelerator's `PerformanceStatistics`, the thermal-pressure
+state — the only thermal signal this machine exposes; it has no temperature key
+in either the IORegistry or the SMC — and Low Power Mode. Sleep leaves a gap in
+the timestamps rather than fabricated rows, which is itself information. macOS
+asks once for Desktop access on first use; refuse it and the toggle reports the
+failure instead of recording nowhere.
 
 The two mechanisms do not fail the same way, and the difference is the whole
 reason the code has the shape it does.
@@ -618,6 +632,8 @@ Sources/BatteryLimitMenu/
   PowerAssertions.swift who else is holding the machine awake
   LowPower.swift        the Low Power Mode toggle, behind the sudoers rule
   ChargeInhibit.swift   suspending charging at any level, via the SMC
+  ChargeModel.swift     the calibrated charge curve: stages, taper, and the sum
+  UsageLog.swift        the record toggle: power + usage sampled to a Desktop CSV
 Sources/SMC/            the SMC protocol, shared by the app and the helper
 Sources/SMCChargeHelper/ the only part that runs as root: two words, one key
   App.swift             the menu bar UI

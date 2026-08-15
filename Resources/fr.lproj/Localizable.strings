@@ -80,3 +80,10 @@
 "icon.lowpower.toggle" = "Mode économie : %@ — cliquer pour basculer";
 "error.lowPowerFailed" = "Impossible de changer le mode économie";
 "error.lowPowerFailedDetail" = "La règle privilégiée a peut-être été retirée. Relancer Tools/install-helper.sh.";
+
+/* Journal d'usage — le bouton d'enregistrement de la rangée d'icônes. */
+"icon.monitor.off" = "Enregistrer l'alimentation et l'usage dans un fichier sur le Bureau (un échantillon toutes les 10 s)";
+"icon.monitor.on" = "Enregistrement en cours vers le Bureau — cliquer pour arrêter";
+"monitor.filename" = "Suivi batterie %@.csv";
+"error.monitorFailed" = "Impossible de démarrer l'enregistrement";
+"error.monitorFailedDetail" = "Le fichier n'a pas pu être créé sur le Bureau. Si macOS vient de demander l'accès au Bureau, autorise-le puis réessaie — sinon, voir Confidentialité et sécurité.";

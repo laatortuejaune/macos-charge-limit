@@ -80,3 +80,10 @@
 "icon.lowpower.toggle" = "Low Power Mode: %@ — click to toggle";
 "error.lowPowerFailed" = "Couldn't change Low Power Mode";
 "error.lowPowerFailedDetail" = "The privileged rule may have been removed. Re-run Tools/install-helper.sh.";
+
+/* Usage log — the record button in the icon row. */
+"icon.monitor.off" = "Record power and usage to a file on the Desktop (one sample every 10 s)";
+"icon.monitor.on" = "Recording to a file on the Desktop — click to stop";
+"monitor.filename" = "Battery log %@.csv";
+"error.monitorFailed" = "Couldn’t start recording";
+"error.monitorFailedDetail" = "The file could not be created on the Desktop. If macOS just asked about Desktop access, allow it and try again — or check Privacy & Security.";

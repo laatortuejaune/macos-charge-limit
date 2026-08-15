@@ -116,6 +116,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// redémarrage — un portable qui ne dort plus jamais, sans rien à l'écran pour
     /// l'expliquer. Quitter proprement le repose donc à zéro.
     func applicationWillTerminate(_ notification: Notification) {
+        // Ferme le fichier du journal d'usage proprement — la mort du processus
+        // le fermerait aussi, mais autant que la dernière ligne soit entière.
+        UsageLog.stop()
         SleepGuard.releaseAll()
         // Celle-ci mourrait seule avec le processus ; la relâcher explicitement
         // la fait disparaître de `pmset -g assertions` tout de suite plutôt qu'à
@@ -290,10 +293,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     // MARK: - Rangée d'icônes
 
-    /// Veille, écran allumé, mode économie, lancement à l'ouverture, réglages,
-    /// quitter : six icônes sur une rangée. L'état se lit à la teinte (accentuée
-    /// = actif), le détail à l'infobulle. Les glyphes sont choisis pour se passer
-    /// de légende : lune, soleil, feuille, app cochée, engrenage, croix.
+    /// Veille, écran allumé, mode économie, charge suspendue, journal d'usage,
+    /// lancement à l'ouverture, réglages, quitter : une rangée d'icônes (le
+    /// mode économie et la suspension n'apparaissent que si la machine les
+    /// permet). L'état se lit à la teinte (accentuée = actif), le détail à
+    /// l'infobulle. Les glyphes sont choisis pour se passer de légende : lune,
+    /// soleil, feuille, éclair barré, cercle d'enregistrement, app cochée,
+    /// engrenage, croix.
     ///
     /// Lune et soleil se suivent parce qu'ils forment une paire : l'une empêche
     /// la machine de dormir, l'autre empêche l'écran de s'éteindre, et ce sont
@@ -335,6 +341,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     tooltip: inhibitTooltip(held: held, canToggle: canToggle),
                     action: canToggle ? #selector(toggleChargeInhibit) : #selector(openBatterySettings))
             }() : nil,
+            // Cercle d'enregistrement : tant que c'est actif, un échantillon
+            // d'alimentation et d'usage toutes les dix secondes dans un CSV sur
+            // le Bureau. L'infobulle porte la destination et la cadence.
+            iconButton(symbol: UsageLog.isActive ? "record.circle.fill" : "record.circle",
+                       active: UsageLog.isActive,
+                       tooltip: L(UsageLog.isActive ? "icon.monitor.on" : "icon.monitor.off"),
+                       action: #selector(toggleUsageLog)),
             iconButton(symbol: "app.badge.checkmark",
                        active: loginOn,
                        tooltip: L("icon.login", L(loginOn ? "panel.on" : "panel.off")),
@@ -446,6 +459,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                    ChargeInhibit.floor))
         }
         refreshTitle()
+    }
+
+    @objc private func toggleUsageLog() {
+        statusItem.menu?.cancelTracking()
+        // L'échec ne vient que de la création du fichier : premier lancement
+        // sans l'accès au Bureau (macOS le demande à la première écriture) ou
+        // accès refusé dans Confidentialité et sécurité.
+        if !UsageLog.toggle() {
+            warn(L("error.monitorFailed"), L("error.monitorFailedDetail"))
+        }
     }
 
     @objc private func toggleDisplayGuard() {

@@ -485,7 +485,9 @@ enum BatteryTime {
 
     // MARK: - Lecture brute
 
-    private static func batterySnapshot() -> [String: Any]? {
+    /// Non privé : le journal d'usage (`UsageLog`) lit le même instantané —
+    /// dupliquer la lecture IORegistry ferait diverger deux copies du même code.
+    static func batterySnapshot() -> [String: Any]? {
         let service = IOServiceGetMatchingService(kIOMainPortDefault,
                                                   IOServiceMatching("AppleSmartBattery"))
         guard service != 0 else { return nil }

@@ -186,18 +186,57 @@ from **74 minutes to 16**. The window widens from 30 seconds up to 10 minutes
 before re-anchoring, which keeps it responsive to a change of activity without
 chasing every spike.
 
-So the time to a limit below 100 % is computed here. Scaling `AvgTimeToFull` by
+**But the telemetry counter freezes under sustained CPU load** — measured at six
+threads, 9 out of 10 readings were identical. The frozen seconds are exactly the
+expensive ones, so averaging only the counted samples yields an optimistic
+autonomy right after a spike — the worst direction for a battery gauge to err.
+The app therefore checks the counter's advance against a monotonic clock that
+stops during sleep, and requires 95 % of the nominal rate; anything less voids
+the window and re-anchors it, so a frozen stretch can never contaminate later
+readings. When telemetry is voided, a second source takes over: the drop in
+`TrueRemainingCapacity` over the window. Discharging, that gauge moves in coarse
+30–90 mAh jumps, so a reading is only trusted once the cumulative drop reaches
+450 mAh (bounding quantization error near ±20 %), and it is displayed rounded to
+15 minutes with a tilde — the precision shown is the precision available. The two
+sources are complementary by construction: the counter only freezes under heavy
+load, which is precisely when the drain is large and 450 mAh accumulate within
+minutes. Both windows are quarantined for 60 s around any power transition
+(the gauge recalibrates by 57–90 mAh in the 30–45 s after charging stops, enough
+to distort a window by half) and are invalidated across sleep, detected by
+comparing wall-clock and awake-clock deltas.
+
+So the time to the limit is computed here. Scaling `AvgTimeToFull` by
 the remaining percentage is the obvious approach and it is wrong: charging slows
 sharply near the top, so the average it represents badly understates the speed of
 the region we care about. Measured over a real charge, 53 → 64 % ran at
 1.4 min/point against the 2.6 min/point that `AvgTimeToFull` implied — scaling it
 would have promised 58 minutes for a stretch that took about 37.
 
-The app extrapolates from the charge current instead. Calibrated against a full
-20 → 80 % charge (58 minutes, 237 samples): **median error 3 minutes, mean bias
-−0.8**. It is still an estimate, and it is shown as one: rounded to 5 minutes and
-prefixed with `~`. At a limit of 100 % no computation happens at all, and Apple's
-own untouched figure is shown without the tilde.
+Extrapolating from the measured charge current alone is only half right. It works
+below the knee — calibrated against a full 20 → 80 % charge (58 minutes,
+237 samples): median error 3 minutes, mean bias −0.8 — but a full 83 → 100 %
+charge sampled every 20 seconds showed why it cannot reach higher: this machine
+charges in **current stages, then a hard taper**. Roughly 4.5 A gave way to a
+flat 3.14 A from 83 to 94 % (voltage still climbing), then constant-voltage at
+4.44 V collapsed the current — 2748, 2464, 2026, 1583, 1171, 767 mA at each
+percent boundary from 95 to 100. Assuming the current constant promised 24
+minutes for a stretch that took 39.
+
+So above the knee a calibrated table takes over: for each percent the predicted
+current is `min(measured, table)`. The two branches encode the physics — below
+the knee the charger sets the current, so follow the measurement (it adapts to a
+weaker charger or a busy machine); above it the battery sets the current, so
+follow the table, which no charger changes. The knee is not a parameter, it is
+just where the curves cross. Validated against the calibration night itself: the
+table predicts 39.1 minutes for the measured 39.0, and 19.5 from 94 % for a
+measured 19.7. The estimate is shown rounded to 5 minutes with a `~`.
+
+The same model now covers a limit of 100 %: Apple's `AvgTimeToFull` — kept only
+as a fallback — read 40 minutes at 91 % for a remainder that took 25, and 28 at
+94 % for one that took 19.7. Missing capacity is counted in mAh against
+`NominalChargeCapacity` (9313 here), which is the scale `TrueRemainingCapacity`
+actually follows — not `DesignCapacity` (9516), which never ages and was
+silently inflating every estimate by ~2 %.
 
 The same calibration corrected two assumptions. Constant-current charging does
 not extend all the way to 80 % — on this machine the current tapers from about
@@ -457,6 +496,22 @@ CHIE = 00   ->  back to 5653 mA
 ```
 
 The sense is inverted from what the name suggests: `01` inhibits, `00` allows.
+
+Two more traits of `CHIE = 01` with the cable still in, both measured over
+25-minute windows during the calibration night:
+
+- **The system declares itself unplugged.** `ExternalConnected` *and*
+  `AppleRawExternalConnected` drop to 0, while `AdapterDetails` keeps reporting
+  the enumerated adapter (35 W, 15 V) — which is how the two states can still be
+  told apart from a single snapshot.
+- **The adapter keeps covering part of the load, at a rate the PMU picks.** A
+  six-thread NEON burn that pulls 3.3 A from the battery when genuinely
+  unplugged drained it at only 1.9 A held inhibited on the cable — and adding a
+  full GPU burn *lowered* the battery drain to 1.4 A, because the PMU took more
+  from the wall. Battery drain in this state is not system consumption, and no
+  estimate should treat it as such: the autonomy shown there comes from the
+  battery gauge itself (or Apple's battery-current-based counter), never from
+  the system-load telemetry.
 
 Three things had to be got right along the way, each of which fails silently
 rather than erroring. The parameter struct is 80 bytes with C alignment, so

@@ -205,6 +205,27 @@ minutes. Both windows are quarantined for 60 s around any power transition
 to distort a window by half) and are invalidated across sleep, detected by
 comparing wall-clock and awake-clock deltas.
 
+Between those two sits a third source, added after a day of side-by-side
+logging: the median of the last few `Amperage` readings. The sensor republishes
+about once a minute and, under sustained load, holds a tight series within
+9–18 % of the gauge — so it delivers a usable figure one to two minutes after a
+regime change, where the gauge window is still accumulating, and it reads the
+battery itself, so it stays honest in the suspended-charge state where
+system-load telemetry does not. Below 300 mA it abstains: at idle the sensor
+jumps by a factor of five between readings, and idle is exactly where telemetry
+works. Ring entries are deduplicated against the ~60 s republication period and
+quarantined 75 s after transitions — the sensor trails a transition by about a
+minute, and a ramp value entering the window would weigh on the median for five.
+
+The same day of logging caught the gauge recalibrating **upward** — +73 mAh the
+moment a full-CPU burn dropped to four threads. On battery a gauge that rises
+has not gained energy; it has recalibrated, and any window spanning that moment
+is optimistic by up to 16 %. So a rise is treated as a transition: anchor
+dropped, quarantine armed. Catching it needs readings closer together than one
+per percent, which is why a 30-second sampling tick runs alongside the power
+notifications — one IORegistry read each, the same read every notification
+already does.
+
 So the time to the limit is computed here. Scaling `AvgTimeToFull` by
 the remaining percentage is the obvious approach and it is wrong: charging slows
 sharply near the top, so the average it represents badly understates the speed of

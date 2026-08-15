@@ -73,12 +73,16 @@ enum BatteryTime {
             let adapterWatts = ((snapshot["AdapterDetails"] as? [String: Any])?["Watts"]
                 as? NSNumber)?.intValue ?? 0
 
-            // Trois sources, par précision décroissante. La télémétrie (~1 %)
-            // s'affiche telle quelle ; le delta de jauge (~20 %) porte un tilde
-            // et un arrondi au quart d'heure — afficher « 3 h 47 » depuis une
-            // source à 20 % près serait mentir sur la précision.
+            // Quatre sources, par précision décroissante. La télémétrie (~1 %)
+            // s'affiche telle quelle ; la médiane de courant (~15 %) et le
+            // delta de jauge (~20 %) portent un tilde et un arrondi assorti —
+            // afficher « 3 h 47 » depuis une source à 20 % près serait mentir
+            // sur la précision.
             if adapterWatts == 0, let remaining = telemetryMinutesRemaining(snapshot) {
                 return L("battery.remaining", format(remaining))
+            }
+            if let remaining = amperageMinutesRemaining(snapshot) {
+                return L("battery.remaining", "~" + format(remaining))
             }
             if let remaining = gaugeMinutesRemaining(snapshot) {
                 return L("battery.remaining", "~" + format(remaining))
@@ -243,9 +247,22 @@ enum BatteryTime {
     /// L'état d'alimentation dont tout changement invalide les fenêtres de jauge.
     /// L'inhibition SMC n'y figure pas en propre : sa bascule fait tomber
     /// `IsCharging`, ce qui suffit à la voir d'ici sans dépendre du helper.
+    /// L'adaptateur énuméré, si : charge suspendue câble en place, les deux
+    /// drapeaux « connecté » mentent déjà (voir summary) — débrancher
+    /// physiquement ne les fait pas bouger, alors que le régime de drain change
+    /// du tout au tout (1,9 A adaptateur présent, 3,3 A sans). Seul
+    /// `AdapterDetails` voit cette transition-là.
     private struct PowerKey: Equatable {
         let plugged: Bool
         let charging: Bool
+        let wall: Bool
+    }
+
+    private static func powerKey(_ snapshot: [String: Any]) -> PowerKey {
+        PowerKey(plugged: flag(snapshot, "ExternalConnected"),
+                 charging: flag(snapshot, "IsCharging"),
+                 wall: (((snapshot["AdapterDetails"] as? [String: Any])?["Watts"]
+                     as? NSNumber)?.intValue ?? 0) > 0)
     }
 
     /// Horloges appariées. `uptime` (temps éveillé) s'arrête en veille, `wall`
@@ -275,13 +292,52 @@ enum BatteryTime {
     /// quarantaine à la pose, et l'invalidation à la moindre anomalie.
     private static var gaugeAnchor: (trc: Double, uptime: TimeInterval, key: PowerKey)?
 
+    /// Derniers relevés du capteur de courant, sur batterie. Le capteur se
+    /// republie environ une fois par minute ; trois relevés en donnent une
+    /// médiane exploitable bien avant que la fenêtre de jauge ait accumulé ses
+    /// 450 mAh — mesuré sur une journée réelle : sous charge soutenue, la série
+    /// est serrée (±5 %) et s'écarte de la jauge de 9 à 18 %.
+    private static var amperageSamples: [(uptime: TimeInterval, mA: Int)] = []
+
+    /// Dernier TRC vu, pour attraper les recalages : sur batterie la jauge ne
+    /// peut pas monter, donc toute remontée est un recalage (mesuré : +10 à
+    /// +73 mAh au relâchement d'une charge), et la fenêtre qui l'enjambe serait
+    /// optimiste d'autant.
+    private static var lastTrc: Double?
+
     /// À appeler au démarrage : pose les ancres pour que la toute première
-    /// ouverture du menu dispose déjà d'une fenêtre exploitable.
+    /// ouverture du menu dispose déjà d'une fenêtre exploitable, et arme le pas
+    /// de relevé.
+    ///
+    /// LE PAS DE 30 S N'EST PAS UN LUXE. Sans lui, menu fermé, les relevés ne
+    /// viennent qu'aux notifications d'alimentation — au pire un par pourcent,
+    /// ~93 mAh d'intervalle. Or le détecteur de recalage compare deux relevés
+    /// CONSÉCUTIFS : un recalage de +73 mAh noyé dans un intervalle qui en
+    /// décharge 93 passe inaperçu, et la fenêtre de jauge reste faussée. À
+    /// 30 s d'intervalle, la décharge entre deux relevés vaut au plus ~25 mAh
+    /// (à 3 A) : tous les recalages mesurés (+41, +73) ressortent. Le pas
+    /// nourrit aussi le ring de courant et recentre les ancres. Coût : une
+    /// lecture IORegistry toutes les 30 s, la même que fait déjà chaque
+    /// notification — invisible au moniteur d'activité, avec dix secondes de
+    /// tolérance pour que le système regroupe les réveils.
     static func primeAverage() {
         guard let snapshot = batterySnapshot() else { return }
         track(snapshot)
         refreshAnchors(snapshot)
+
+        guard sampler == nil else { return }
+        let timer = DispatchSource.makeTimerSource(queue: .main)
+        timer.schedule(deadline: .now() + 30, repeating: 30, leeway: .seconds(10))
+        timer.setEventHandler {
+            guard let snapshot = batterySnapshot() else { return }
+            track(snapshot)
+            refreshAnchors(snapshot)
+        }
+        timer.resume()
+        sampler = timer
     }
+
+    private static var sampler: DispatchSourceTimer?
 
     /// Entretien des ancres, à chaque lecture d'instantané, en deux temps
     /// stricts : `track` invalide AVANT que les estimateurs lisent (une fenêtre
@@ -291,8 +347,7 @@ enum BatteryTime {
     /// allait s'en servir).
     private static func track(_ snapshot: [String: Any]) {
         let now = clocks()
-        let key = PowerKey(plugged: flag(snapshot, "ExternalConnected"),
-                           charging: flag(snapshot, "IsCharging"))
+        let key = powerKey(snapshot)
 
         // Veille traversée depuis le dernier relevé : le temps mur a couru, pas
         // le temps éveillé. Les fenêtres de jauge sont mortes ; la télémétrique
@@ -302,19 +357,63 @@ enum BatteryTime {
         if let last = lastSample,
            now.wall.timeIntervalSince(last.wall) - (now.uptime - last.uptime) > 60 {
             gaugeAnchor = nil
+            // L'horloge éveillée s'est arrêtée avec la machine : l'âge des
+            // relevés de courant ne les éliminerait pas, alors qu'ils décrivent
+            // le régime d'avant la veille.
+            amperageSamples.removeAll()
             lastTransitionUptime = now.uptime
         }
         lastSample = now
 
         if key != lastKey {
             gaugeAnchor = nil
+            // Le capteur de courant traîne environ une minute derrière une
+            // transition : des relevés pris avant elle décriraient l'ancien
+            // régime avec l'assurance du nouveau.
+            amperageSamples.removeAll()
             // Au tout premier relevé aussi : l'app a pu être lancée dans les
             // secondes qui suivent un débranchement, en plein recalage — une
             // transition qui précède le lancement reste une transition.
             lastTransitionUptime = now.uptime
             lastKey = key
         }
+
+        if let trc = trueRemaining(snapshot) {
+            // Recalage montant : sur batterie, une jauge qui remonte n'a pas
+            // gagné d'énergie, elle s'est recalée (mesuré : +73 mAh au passage
+            // de 100 % à 67 % de charge processeur). La fenêtre en cours est
+            // fausse ; le capteur de courant, lui, n'est pas concerné.
+            if let last = lastTrc, !key.plugged, trc > last + 4 {
+                gaugeAnchor = nil
+                lastTransitionUptime = now.uptime
+            }
+            lastTrc = trc
+        }
+
+        // Alimentation du capteur de courant : décharge uniquement, hors
+        // quarantaine (le capteur traîne ~1 min derrière une transition — une
+        // valeur de rampe qui entrerait dans la fenêtre pèserait sur la médiane
+        // pendant cinq minutes), et sans doublonner : le capteur se republie
+        // environ une fois par minute, donc une valeur IDENTIQUE revue avant
+        // 70 s est très probablement la même publication — la reprendre
+        // laisserait la cadence d'ouverture du menu pondérer la médiane, et
+        // ferait passer un capteur mort pour éternellement frais. Une valeur
+        // différente, elle, est forcément une publication neuve.
+        if !key.plugged, let current = amperage(snapshot), current < 0,
+           lastTransitionUptime.map({ now.uptime - $0 >= sensorSettle }) ?? true {
+            if amperageSamples.last.map({ now.uptime - $0.uptime >= 70 || $0.mA != current })
+                ?? true {
+                amperageSamples.append((now.uptime, current))
+            }
+            amperageSamples.removeAll { now.uptime - $0.uptime > 6 * 60 }
+            if amperageSamples.count > 8 { amperageSamples.removeFirst() }
+        }
     }
+
+    /// Traîne du capteur de courant après une transition d'alimentation,
+    /// mesurée à ~1 min (c'est la grâce de `rampGrace` côté charge) — plus une
+    /// marge : aucun relevé n'entre dans le ring avant ce délai.
+    private static let sensorSettle: TimeInterval = 75
 
     private static func refreshAnchors(_ snapshot: [String: Any]) {
         let now = clocks()
@@ -426,6 +525,46 @@ enum BatteryTime {
             })
         guard let capacity, capacity > 0 else { return nil }
         return capacity * voltage / 1000
+    }
+
+    // MARK: - Autonomie, source courant
+
+    /// Étage intermédiaire : la médiane des derniers relevés du capteur de
+    /// courant. Moins précise que la télémétrie (~15 % contre ~1 %), mais
+    /// disponible une à deux minutes après un changement de régime, là où la
+    /// fenêtre de jauge doit d'abord accumuler ses 450 mAh — et elle lit la
+    /// batterie elle-même, donc elle reste valide charge suspendue câble en
+    /// place, où la télémétrie ne dit rien du drain réel.
+    ///
+    /// Sous ~300 mA on s'abstient : à vide le capteur saute d'un facteur cinq
+    /// d'un relevé à l'autre (mesuré : −9 à −49 mA au repos), et c'est
+    /// précisément le régime où la télémétrie, elle, fonctionne.
+    private static func amperageMinutesRemaining(_ snapshot: [String: Any]) -> Int? {
+        let now = ProcessInfo.processInfo.systemUptime
+        let recent = amperageSamples.filter { now - $0.uptime <= 5 * 60 }
+        guard recent.count >= 3,
+              let first = recent.first, let last = recent.last,
+              last.uptime - first.uptime >= 90,
+              let trc = trueRemaining(snapshot)
+        else { return nil }
+
+        let drains = recent.map { Double(-$0.mA) }.sorted()
+        // Médiane vraie : sur un effectif pair, prendre l'élément haut de la
+        // paire centrale biaiserait systématiquement vers le drain fort.
+        let count = drains.count
+        let median = count.isMultiple(of: 2)
+            ? (drains[count / 2 - 1] + drains[count / 2]) / 2
+            : drains[count / 2]
+        guard median >= 300, median <= 8000 else { return nil }
+
+        let minutes = Int((trc / median * 60).rounded())
+        guard minutes > 0, minutes < 48 * 60 else { return nil }
+        // Arrondi à dix minutes : la précision affichée est celle du capteur.
+        // Sauf en toute fin de batterie : plaquer 4 minutes réelles sur
+        // « ~10 min » serait optimiste d'un facteur 2,5 au moment précis où ça
+        // coûte le plus — sous 8 minutes, le pas descend à 5.
+        guard minutes >= 8 else { return max(5, (minutes + 2) / 5 * 5) }
+        return max(10, (minutes + 4) / 10 * 10)
     }
 
     // MARK: - Autonomie, source jauge
